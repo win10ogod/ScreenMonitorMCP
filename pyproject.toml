@@ -34,7 +34,6 @@ dependencies = [
     "python-dotenv>=1.0.0",        # Environment variables
     "pydantic>=2.0.0",             # Data validation
     "pydantic-settings>=2.0.0",    # Settings management
-    "structlog>=23.1.0",           # Structured logging
     "aiosqlite>=0.19.0",           # Async SQLite
     "mcp>=1.0.0",                  # Model Context Protocol
 ]
@@ -45,6 +44,7 @@ http = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "openai>=1.3.0",
+    "structlog>=23.1.0",           # Structured logging (HTTP only)
 ]
 # Windows GPU-accelerated screen capture optimization (DXGI - fully working)
 windows-perf = [
@@ -67,6 +67,7 @@ all = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "openai>=1.3.0",
+    "structlog>=23.1.0",
     "dxcam>=0.0.5",
     "winsdk>=1.0.0b10",
     "numpy>=1.21.0",
