@@ -145,20 +145,15 @@ Note: This approach is deprecated. Use the recommended client-side analysis inst
 
 ## Available Tools
 
-### Recommended (Client-Side Analysis)
+### Screen Capture
 
-- **`capture_screen`** ⚡ **NEW** - Capture screenshot and return MCP Resource URI
-  - **Optimal approach**: Returns tiny response (~200 bytes) with resource URI
+- **`capture_screen`** - Capture screenshot and return MCP Resource URI
+  - Returns tiny response (~200 bytes) with resource URI
   - Client fetches image via MCP Resources API automatically
-  - No large base64 data in tool responses (95%+ size reduction)
+  - **Eliminates token explosion** - no large data in responses
   - No API keys required, uses your MCP client's built-in vision
   - Cache keeps last 10 captures for resource requests
-
-- **`capture_screen_base64`** - Capture screenshot with automatic compression
-  - **Fallback option**: Returns compressed base64 data for compatibility
-  - Auto-compression: JPEG quality 50, max 1280px width (reduces 5-8 MB → 100-300 KB)
-  - Good for clients without MCP Resource support
-  - Still significantly smaller than uncompressed images
+  - **This is the ONLY way to capture screens** - simple and efficient
 
 ### Streaming & Monitoring
 

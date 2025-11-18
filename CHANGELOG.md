@@ -189,34 +189,48 @@ print(f"Average capture time: {stats['avg_capture_time_ms']}ms")
 
 ### ✨ New Features
 
-**MCP Resources API for Efficient Image Handling:**
-- 🎯 **`capture_screen`** (NEW - RECOMMENDED): Returns MCP Resource URI instead of base64 data
-  - Response size reduced by 95%+ (from 5-8 MB to ~200 bytes)
+**MCP Resources API - The ONLY Way to Capture Screens:**
+- 🎯 **`capture_screen`**: Returns MCP Resource URI instead of base64 data
+  - Response size: ~200 bytes (vs 5-8 MB with base64)
   - Client fetches image via MCP Resources API automatically
   - Resource pattern: `screen://capture/{id}`
   - Cache maintains last 10 captures for resource requests
   - Better MCP protocol compliance and cleaner architecture
-- 🎯 **`capture_screen_base64`** (LEGACY): Returns compressed base64 for compatibility
-  - Auto-compression: JPEG quality 50, max 1280px width by default
-  - Size reduction: 5-8 MB → 100-300 KB (configurable)
-  - Good fallback for clients without resource support
-  - Customizable quality and size limits
 - 🎯 **Resource Handler**: `@mcp.resource` decorator for image serving
   - Automatic cache management (LRU, max 10 items)
   - Proper MIME type handling
   - Clean separation of capture metadata and image data
 
 **Benefits:**
-- ⚡ Dramatically faster tool responses (no large data transfer)
+- ⚡ **Eliminates token explosion** - no large data in tool responses
 - 🎯 Better memory efficiency (lazy loading)
 - 🔧 Cleaner protocol usage (resources for binary data)
-- 🔄 Backward compatible (base64 option still available)
+- 🎨 Simpler API - only one way to capture screens
 
-**Addresses user feedback:** "image_base64太長了" (base64 data too long)
+**Addresses user feedback:**
+- "image_base64太長了" (base64 data too long)
+- "然後刪除base64, 還是tokens爆炸" (still token explosion with base64)
 
 ### 🔥 BREAKING CHANGES
 
-**Complete Removal of External AI Dependencies from MCP Mode:**
+**1. Removed `capture_screen_base64` Tool:**
+
+**User Feedback:** "然後刪除base64, 還是tokens爆炸" (Delete base64, still causes token explosion)
+
+**What Was Removed:**
+- ❌ `capture_screen_base64()` tool - Even with compression, still caused token explosion
+
+**Why Removed:**
+- Even with aggressive compression (JPEG quality 50, max 1280px width), responses were still 100-300 KB
+- This still caused token explosion in MCP clients
+- `capture_screen` with resource URI is the superior solution (~200 bytes)
+- Simpler API - only one way to do things
+
+**Migration:**
+- Old: `capture_screen_base64(monitor=0, quality=50)`
+- New: `capture_screen(monitor=0)` - Returns resource URI, client fetches image automatically
+
+**2. Complete Removal of External AI Dependencies from MCP Mode:**
 
 **User Feedback:** "這是你的問題, 你根本沒有重構, 應該完全刪除掉外部ai" (You didn't actually refactor, you should completely remove external AI)
 
