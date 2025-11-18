@@ -187,6 +187,33 @@ print(f"Average capture time: {stats['avg_capture_time_ms']}ms")
 - 📊 Low-frequency monitoring
 - 🔧 Simple automation tasks
 
+### ✨ New Features
+
+**MCP Resources API for Efficient Image Handling:**
+- 🎯 **`capture_screen`** (NEW - RECOMMENDED): Returns MCP Resource URI instead of base64 data
+  - Response size reduced by 95%+ (from 5-8 MB to ~200 bytes)
+  - Client fetches image via MCP Resources API automatically
+  - Resource pattern: `screen://capture/{id}`
+  - Cache maintains last 10 captures for resource requests
+  - Better MCP protocol compliance and cleaner architecture
+- 🎯 **`capture_screen_base64`** (LEGACY): Returns compressed base64 for compatibility
+  - Auto-compression: JPEG quality 50, max 1280px width by default
+  - Size reduction: 5-8 MB → 100-300 KB (configurable)
+  - Good fallback for clients without resource support
+  - Customizable quality and size limits
+- 🎯 **Resource Handler**: `@mcp.resource` decorator for image serving
+  - Automatic cache management (LRU, max 10 items)
+  - Proper MIME type handling
+  - Clean separation of capture metadata and image data
+
+**Benefits:**
+- ⚡ Dramatically faster tool responses (no large data transfer)
+- 🎯 Better memory efficiency (lazy loading)
+- 🔧 Cleaner protocol usage (resources for binary data)
+- 🔄 Backward compatible (base64 option still available)
+
+**Addresses user feedback:** "image_base64太長了" (base64 data too long)
+
 ### 🐛 Bug Fixes
 
 **Critical Runtime Fixes:**
