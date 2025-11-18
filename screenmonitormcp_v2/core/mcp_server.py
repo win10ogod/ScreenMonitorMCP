@@ -86,36 +86,62 @@ def streaming_guide_prompt() -> str:
 
     This prompt explains how to use streaming features.
     """
-    return """To use screen streaming in MCP mode:
+    return """Screen streaming has TWO modes depending on your connection:
+
+=== STDIO MODE (Claude Desktop, local MCP clients) ===
 
 1. Create a stream with create_stream:
    - Returns a stream_id
    - Specify fps (frames per second), quality, and format
    - Example: create_stream(monitor=0, fps=10, quality=75)
 
-2. Capture frames from the stream with capture_stream_frame:
+2. Capture frames MANUALLY with capture_stream_frame:
    - Takes the stream_id
    - Returns a resource URI for the current frame
    - Image automatically displayed by MCP client
    - Example: capture_stream_frame(stream_id="abc123...")
 
-3. Monitor stream status:
-   - Use list_streams to see all active streams
-   - Use get_stream_info for detailed stream information
+3. Repeat step 2 as needed for each frame
 
 4. Stop the stream when done:
    - Use stop_stream(stream_id) to end streaming
 
-Streaming is useful for:
-- Monitoring screen changes over time
-- Periodic screenshots at specified FPS
-- Analyzing how screens change
-
-Example workflow:
+Stdio workflow:
 1. "Create a stream at 5 fps"
 2. "Capture a frame from the stream"
 3. "Capture another frame" (repeatable)
-4. "Stop the stream"""
+4. "Stop the stream"
+
+=== SSE MODE (MCP over HTTP, remote connections) ===
+
+1. Create a stream with create_stream (same as stdio)
+
+2. Start AUTO-PUSH with start_auto_push_stream:
+   - Takes the stream_id and fps
+   - Frames are automatically pushed to your client
+   - NO need to call capture_stream_frame manually
+   - Example: start_auto_push_stream(stream_id="abc123...", fps=5)
+
+3. Frames arrive automatically at specified FPS
+
+4. Stop auto-push and stream when done:
+   - stop_auto_push_stream_tool(stream_id)
+   - stop_stream(stream_id)
+
+SSE workflow:
+1. "Create a stream at 5 fps"
+2. "Start auto-push for this stream at 5 fps"
+3. (Frames arrive automatically)
+4. "Stop auto-push and stream"
+
+Monitor stream status:
+- list_streams: See all active streams
+- get_stream_info: Get detailed stream information
+
+Streaming is useful for:
+- Monitoring screen changes over time
+- Periodic screenshots at specified FPS
+- Analyzing how screens change"""
 
 @mcp.prompt()
 def system_info_prompt() -> str:
@@ -351,10 +377,78 @@ async def stop_stream(stream_id: str) -> str:
         Success or error message
     """
     try:
+        # Stop auto-push if active
+        try:
+            from .mcp_sse_server import stop_auto_push_stream
+            await stop_auto_push_stream(stream_id)
+        except ImportError:
+            pass  # SSE mode not available
+
         result = await stream_manager.stop_stream(stream_id)
         return f"Stream stopped: {result}"
     except Exception as e:
         logger.error(f"Failed to stop stream: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def start_auto_push_stream(
+    stream_id: str,
+    fps: int = 5
+) -> str:
+    """Start automatically pushing frames from a stream (SSE mode only)
+
+    This enables automatic frame push to SSE clients without manual capture.
+    Only works when connected via MCP over SSE (HTTP mode).
+
+    Args:
+        stream_id: Stream ID to start auto-push for
+        fps: Frames per second to push (default: 5)
+
+    Returns:
+        Success or error message
+    """
+    try:
+        # Check if SSE mode is available
+        try:
+            from .mcp_sse_server import start_auto_push_stream as _start_auto_push
+        except ImportError:
+            return "Error: Auto-push requires MCP over SSE mode (HTTP server mode). Use stdio mode with capture_stream_frame for manual capture."
+
+        # Verify stream exists
+        stream_info = await stream_manager.get_stream_info(stream_id)
+        if not stream_info:
+            return f"Error: Stream {stream_id} not found"
+
+        # Start auto-push
+        await _start_auto_push(stream_id, fps)
+
+        return f"Auto-push started for stream {stream_id} at {fps} fps. Frames will be pushed automatically via SSE."
+    except Exception as e:
+        logger.error(f"Failed to start auto-push: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def stop_auto_push_stream_tool(stream_id: str) -> str:
+    """Stop automatically pushing frames from a stream
+
+    Args:
+        stream_id: Stream ID to stop auto-push for
+
+    Returns:
+        Success or error message
+    """
+    try:
+        # Check if SSE mode is available
+        try:
+            from .mcp_sse_server import stop_auto_push_stream as _stop_auto_push
+        except ImportError:
+            return "Error: Auto-push requires MCP over SSE mode (HTTP server mode)"
+
+        await _stop_auto_push(stream_id)
+
+        return f"Auto-push stopped for stream {stream_id}"
+    except Exception as e:
+        logger.error(f"Failed to stop auto-push: {e}")
         return f"Error: {str(e)}"
 
 @mcp.tool()

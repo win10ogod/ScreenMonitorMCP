@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "screenmonitormcp-v2"
-version = "2.5.0"
+version = "2.6.0"
 description = "A revolutionary Model Context Protocol (MCP) server that gives AI real-time vision capabilities - now with MCP-only mode (no external dependencies required)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,7 @@ http = [
     "uvicorn[standard]>=0.24.0",
     "openai>=1.3.0",
     "structlog>=23.1.0",           # Structured logging (HTTP only)
+    "sse-starlette>=2.0.0",        # Server-Sent Events for MCP over HTTP
 ]
 # Windows GPU-accelerated screen capture optimization (DXGI - fully working)
 windows-perf = [
