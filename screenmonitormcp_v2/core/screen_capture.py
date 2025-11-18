@@ -2,11 +2,11 @@
 """
 Screen Capture Module for ScreenMonitorMCP v2
 
-This module provides screen capture functionality using the mss library.
-It supports multi-monitor setups and various image formats.
+This module provides optimized screen capture functionality using the mss library.
+It supports multi-monitor setups, various image formats, and performance optimizations.
 
 Author: ScreenMonitorMCP Team
-Version: 2.0.0
+Version: 2.4.0
 License: MIT
 """
 
@@ -14,8 +14,10 @@ import asyncio
 import base64
 import io
 import logging
+import time
 from typing import Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import lru_cache
 
 import mss
 from PIL import Image
@@ -24,40 +26,69 @@ logger = logging.getLogger(__name__)
 
 
 class ScreenCapture:
-    """Screen capture functionality using mss library."""
-    
+    """Optimized screen capture functionality using mss library."""
+
     def __init__(self):
-        """Initialize the screen capture system."""
+        """Initialize the screen capture system with performance optimizations."""
         self.logger = logging.getLogger(__name__)
+        self._capture_cache = {}
+        self._cache_ttl = timedelta(milliseconds=100)  # 100ms cache
+        self._performance_stats = {
+            "total_captures": 0,
+            "cache_hits": 0,
+            "avg_capture_time_ms": 0.0
+        }
     
-    async def capture_screen(self, monitor: int = 0, region: Optional[Dict[str, int]] = None, 
-                           format: str = "png") -> Dict[str, Any]:
-        """Capture screen and return image data.
-        
+    async def capture_screen(self, monitor: int = 0, region: Optional[Dict[str, int]] = None,
+                           format: str = "png", use_cache: bool = True) -> Dict[str, Any]:
+        """Capture screen and return image data with performance optimizations.
+
         Args:
             monitor: Monitor number to capture (0 for primary)
             region: Optional region dict with x, y, width, height
             format: Image format (png, jpeg)
-            
+            use_cache: Whether to use cache for repeated captures
+
         Returns:
             Dict containing success status and image_data as base64 string
         """
         try:
+            start_time = time.perf_counter()
+
+            # Check cache if enabled
+            cache_key = None
+            if use_cache:
+                cache_key = f"{monitor}_{region}_{format}"
+                cached = self._get_from_cache(cache_key)
+                if cached:
+                    self._performance_stats["cache_hits"] += 1
+                    return cached
+
             # Run capture in executor to avoid blocking
             loop = asyncio.get_event_loop()
             image_bytes = await loop.run_in_executor(
                 None, self._capture_screen_sync, monitor, region, format
             )
-            
+
             # Convert to base64 for MCP compatibility
             image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-            
-            return {
+
+            result = {
                 "success": True,
                 "image_data": image_base64,
                 "format": format,
                 "size": len(image_bytes)
             }
+
+            # Update cache if enabled
+            if use_cache and cache_key:
+                self._add_to_cache(cache_key, result)
+
+            # Update performance stats
+            capture_time_ms = (time.perf_counter() - start_time) * 1000
+            self._update_performance_stats(capture_time_ms)
+
+            return result
         except Exception as e:
             self.logger.error(f"Screen capture failed: {e}")
             return {
@@ -65,6 +96,47 @@ class ScreenCapture:
                 "message": str(e),
                 "image_data": None
             }
+
+    def _get_from_cache(self, key: str) -> Optional[Dict[str, Any]]:
+        """Get cached capture if not expired."""
+        if key in self._capture_cache:
+            cached_time, cached_data = self._capture_cache[key]
+            if datetime.now() - cached_time < self._cache_ttl:
+                return cached_data
+            else:
+                del self._capture_cache[key]
+        return None
+
+    def _add_to_cache(self, key: str, data: Dict[str, Any]) -> None:
+        """Add capture to cache with timestamp."""
+        self._capture_cache[key] = (datetime.now(), data)
+        # Clean old cache entries (simple cleanup)
+        if len(self._capture_cache) > 10:
+            oldest_key = min(self._capture_cache.keys(),
+                           key=lambda k: self._capture_cache[k][0])
+            del self._capture_cache[oldest_key]
+
+    def _update_performance_stats(self, capture_time_ms: float) -> None:
+        """Update performance statistics."""
+        self._performance_stats["total_captures"] += 1
+        total = self._performance_stats["total_captures"]
+        current_avg = self._performance_stats["avg_capture_time_ms"]
+        # Running average
+        self._performance_stats["avg_capture_time_ms"] = (
+            (current_avg * (total - 1) + capture_time_ms) / total
+        )
+
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Get capture performance statistics."""
+        cache_hit_rate = 0.0
+        if self._performance_stats["total_captures"] > 0:
+            cache_hit_rate = (self._performance_stats["cache_hits"] /
+                            self._performance_stats["total_captures"]) * 100
+        return {
+            **self._performance_stats,
+            "cache_hit_rate_percent": round(cache_hit_rate, 2),
+            "cache_size": len(self._capture_cache)
+        }
     
     async def capture_screen_raw(self, monitor: int = 0, region: Optional[Dict[str, int]] = None, 
                                format: str = "png") -> bytes:
@@ -119,13 +191,15 @@ class ScreenCapture:
                 img = Image.frombytes("RGBA", screenshot.size, screenshot.bgra, "raw", "BGRA")
                 img = img.convert("RGB")
             
-            # Save to bytes
+            # Save to bytes with optimized compression
             img_bytes = io.BytesIO()
             if format.lower() == "jpeg":
-                img.save(img_bytes, format="JPEG", quality=85)
+                # Optimized JPEG: quality=75 provides good balance
+                img.save(img_bytes, format="JPEG", quality=75, optimize=True)
             else:
-                img.save(img_bytes, format="PNG")
-            
+                # Optimized PNG: compress_level=6 is faster than default 9
+                img.save(img_bytes, format="PNG", compress_level=6, optimize=True)
+
             return img_bytes.getvalue()
     
     async def get_monitors(self) -> list[Dict[str, Any]]:
