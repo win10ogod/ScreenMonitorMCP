@@ -46,24 +46,6 @@ except ImportError:
     from core.performance_monitor import performance_monitor
     from server.config import config
 
-# AI service is optional for MCP mode (only needed for HTTP server mode)
-AI_SERVICE_AVAILABLE = False
-ai_service = None
-try:
-    try:
-        from .ai_service import ai_service as _ai_service
-    except ImportError:
-        from core.ai_service import ai_service as _ai_service
-
-    ai_service = _ai_service
-    AI_SERVICE_AVAILABLE = ai_service.is_available() if ai_service else False
-    if AI_SERVICE_AVAILABLE:
-        logger.info("AI service initialized (optional, for HTTP mode)")
-    else:
-        logger.info("AI service loaded but not configured (MCP-only mode)")
-except ImportError:
-    logger.info("AI service not loaded - MCP-only mode (recommended)")
-
 # Initialize FastMCP server
 mcp = FastMCP("screenmonitormcp-v2")
 
@@ -262,66 +244,6 @@ async def capture_screen_base64(
         logger.error(f"Screen capture failed: {e}")
         return f"Error: {str(e)}"
 
-# Legacy AI-dependent tools removed (v2.1+)
-# Use capture_screen_image() instead and let your MCP client analyze images
-
-@mcp.tool()
-async def list_ai_models() -> str:
-    """List available AI models from the configured provider (HTTP mode only)
-
-    Note: This tool is only available when AI service is configured.
-    MCP mode does not require AI service configuration.
-
-    Returns:
-        List of available models as text
-    """
-    try:
-        if not AI_SERVICE_AVAILABLE or ai_service is None:
-            return "AI service not available. This tool is for HTTP server mode only. MCP mode uses client-side analysis."
-
-        if not ai_service.is_available():
-            return "Error: AI service is not configured. Please set OPENAI_API_KEY."
-
-        result = await ai_service.list_models()
-
-        if result.get("success"):
-            models = result.get("models", [])
-            if models:
-                return f"Available models: {', '.join(models)}"
-            else:
-                return "No models available"
-        else:
-            return f"Error: {result.get('error', 'Unknown error occurred')}"
-    except Exception as e:
-        logger.error(f"Failed to list AI models: {e}")
-        return f"Error: {str(e)}"
-
-@mcp.tool()
-def get_ai_status() -> str:
-    """Get AI service configuration status (HTTP mode only)
-
-    Note: This tool is only relevant when AI service is configured.
-    MCP mode does not require AI service configuration.
-
-    Returns:
-        AI service status information
-    """
-    try:
-        if not AI_SERVICE_AVAILABLE or ai_service is None:
-            return "AI service not loaded (MCP-only mode). This is normal and recommended for MCP usage."
-
-        status = ai_service.get_status()
-        return f"AI Service Status: {status}"
-    except Exception as e:
-        logger.error(f"Failed to get AI status: {e}")
-        return f"Error: {str(e)}"
-
-# First analyze_scene_from_memory function removed (duplicate)
-
-# First query_memory function removed (duplicate)
-
-# First get_memory_statistics function removed (duplicate)
-
 @mcp.tool()
 def get_performance_metrics() -> str:
     """Get detailed performance metrics and system health
@@ -346,8 +268,6 @@ def get_system_status() -> str:
     try:
         status = {
             "timestamp": datetime.now().isoformat(),
-            "ai_service": ai_service.is_available() if AI_SERVICE_AVAILABLE and ai_service else False,
-            "ai_service_mode": "HTTP only" if AI_SERVICE_AVAILABLE else "Not loaded (MCP-only)",
             "screen_capture": screen_capture.is_available(),
             "performance_monitor": performance_monitor.is_running(),
             "stream_manager": stream_manager.is_running()
@@ -431,78 +351,6 @@ async def stop_stream(stream_id: str) -> str:
         return f"Error: {str(e)}"
 
 # Memory System Tools
-
-@mcp.tool()
-async def analyze_scene_from_memory(
-    query: str,
-    stream_id: Optional[str] = None,
-    time_range_minutes: int = 30,
-    limit: int = 10
-) -> str:
-    """Analyze scene based on stored memory data (HTTP mode only)
-
-    Note: This tool requires AI service for analysis.
-    For MCP mode, use capture_screen_image and ask your client to analyze.
-
-    Args:
-        query: What to analyze or look for in the stored scenes
-        stream_id: Specific stream to analyze (optional)
-        time_range_minutes: Time range to search in minutes (default: 30)
-        limit: Maximum number of results to analyze (default: 10)
-
-    Returns:
-        Scene analysis based on memory data
-    """
-    try:
-        if not AI_SERVICE_AVAILABLE or ai_service is None:
-            return "AI service not available. This tool requires AI service (HTTP mode only)."
-
-        result = await ai_service.analyze_scene_from_memory(
-            query=query,
-            stream_id=stream_id,
-            time_range_minutes=time_range_minutes,
-            limit=limit
-        )
-        return f"Scene analysis: {result}"
-    except Exception as e:
-        logger.error(f"Failed to analyze scene from memory: {e}")
-        return f"Error: {str(e)}"
-
-@mcp.tool()
-async def query_memory(
-    query: str,
-    stream_id: Optional[str] = None,
-    time_range_minutes: int = 60,
-    limit: int = 20
-) -> str:
-    """Query the memory system for stored analysis data (HTTP mode only)
-
-    Note: This tool requires AI service for querying.
-    For MCP mode, memory operations should be done client-side.
-
-    Args:
-        query: Search query for memory entries
-        stream_id: Filter by specific stream ID (optional)
-        time_range_minutes: Time range to search in minutes (default: 60)
-        limit: Maximum number of results (default: 20)
-
-    Returns:
-        Memory query results
-    """
-    try:
-        if not AI_SERVICE_AVAILABLE or ai_service is None:
-            return "AI service not available. This tool requires AI service (HTTP mode only)."
-
-        result = await ai_service.query_memory_direct(
-            query=query,
-            stream_id=stream_id,
-            time_range_minutes=time_range_minutes,
-            limit=limit
-        )
-        return f"Memory query results: {result}"
-    except Exception as e:
-        logger.error(f"Failed to query memory: {e}")
-        return f"Error: {str(e)}"
 
 @mcp.tool()
 async def get_memory_statistics() -> str:
