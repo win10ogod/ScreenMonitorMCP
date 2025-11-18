@@ -49,6 +49,66 @@ except ImportError:
 # Initialize FastMCP server
 mcp = FastMCP("screenmonitormcp-v2")
 
+# Add prompts to guide the MCP client on how to use this server
+@mcp.prompt()
+def capture_screenshot_prompt() -> str:
+    """How to capture and view screenshots
+
+    This prompt explains the correct way to capture and view screenshots
+    using this MCP server.
+    """
+    return """To capture and view a screenshot:
+
+1. Call the capture_screen tool:
+   - This returns a resource_uri like "screen://capture/abc123"
+
+2. The image will be automatically displayed to you
+   - MCP clients (like Claude Desktop) automatically fetch and display resources
+   - You don't need to call any additional tools
+   - The image will appear in the conversation
+
+3. You can then analyze the image naturally
+   - Describe what you see
+   - Answer questions about the image
+   - Provide feedback or suggestions
+
+Example usage:
+- "Capture my screen and tell me what you see"
+- "Take a screenshot and check if there are any errors"
+- "Capture the screen and analyze the UI layout"
+
+DO NOT try to read the resource URI with read_file or other file tools.
+The MCP protocol handles resource fetching automatically."""
+
+@mcp.prompt()
+def system_info_prompt() -> str:
+    """How to get system information
+
+    This prompt explains how to check system status and performance.
+    """
+    return """To check system status and performance:
+
+1. Use get_system_status to see overall system health:
+   - Screen capture availability
+   - Performance monitor status
+   - Stream manager status
+
+2. Use get_performance_metrics for detailed metrics:
+   - CPU usage
+   - Memory usage
+   - Capture performance
+
+3. Use get_capture_backend_info to see screenshot backend details:
+   - Active backend (MSS, DXGI, or WGC)
+   - Windows optimization status
+   - Performance statistics
+   - Expected improvements
+
+4. Use get_memory_statistics for memory system stats
+
+Note: Streaming is primarily for HTTP/WebSocket mode.
+For MCP mode, use capture_screen for single screenshots."""
+
 # Initialize components
 screen_capture = ScreenCapture()
 
