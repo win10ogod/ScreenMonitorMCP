@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "ScreenMonitorMCP Gaming Presets",
+  "description": "Predefined gaming configurations for different game types and scenarios",
+  "version": "2.7.0",
+
+  "presets": {
+    "screenshot": {
+      "name": "Screenshot / Documentation",
+      "description": "High quality screenshots for documentation and sharing",
+      "mode": "quality",
+      "config": {
+        "fps": 1,
+        "quality": 95,
+        "format": "png",
+        "enable_frame_skip": false,
+        "adaptive_quality": false,
+        "cache_size": 10
+      },
+      "use_cases": ["screenshots", "documentation", "bug reports"],
+      "expected_latency_ms": "50-100",
+      "recommended_for": "Any system"
+    },
+
+    "casual_gaming": {
+      "name": "Casual Gaming",
+      "description": "Balanced settings for casual games and general monitoring",
+      "mode": "balanced",
+      "config": {
+        "fps": 30,
+        "quality": 75,
+        "format": "jpeg",
+        "enable_frame_skip": true,
+        "adaptive_quality": true,
+        "cache_size": 60
+      },
+      "use_cases": ["casual games", "turn-based games", "strategy games", "monitoring"],
+      "expected_latency_ms": "8-12",
+      "recommended_for": "Mid-range systems"
+    },
+
+    "competitive_gaming": {
+      "name": "Competitive Gaming",
+      "description": "Optimized for competitive gaming with 60 FPS",
+      "mode": "performance",
+      "config": {
+        "fps": 60,
+        "quality": 50,
+        "format": "jpeg",
+        "enable_frame_skip": true,
+        "adaptive_quality": true,
+        "cache_size": 120
+      },
+      "use_cases": ["competitive fps", "moba", "battle royale", "racing games"],
+      "expected_latency_ms": "5-8",
+      "recommended_for": "Good systems with GPU acceleration"
+    },
+
+    "esports": {
+      "name": "Esports / High Performance",
+      "description": "Maximum performance for esports and professional gaming",
+      "mode": "extreme",
+      "config": {
+        "fps": 120,
+        "quality": 30,
+        "format": "jpeg",
+        "enable_frame_skip": true,
+        "adaptive_quality": true,
+        "cache_size": 180
+      },
+      "use_cases": ["esports", "professional gaming", "high refresh rate displays"],
+      "expected_latency_ms": "3-5",
+      "recommended_for": "High-end systems with GPU acceleration (DXGI/WGC)"
+    },
+
+    "streaming_observer": {
+      "name": "Stream Observer",
+      "description": "Watch and analyze gameplay streams",
+      "mode": "balanced",
+      "config": {
+        "fps": 24,
+        "quality": 70,
+        "format": "jpeg",
+        "enable_frame_skip": true,
+        "adaptive_quality": true,
+        "cache_size": 48
+      },
+      "use_cases": ["watching streams", "coaching", "analysis"],
+      "expected_latency_ms": "10-15",
+      "recommended_for": "Any system"
+    },
+
+    "mobile_gaming": {
+      "name": "Mobile Gaming",
+      "description": "Optimized for mobile game emulators",
+      "mode": "balanced",
+      "config": {
+        "fps": 30,
+        "quality": 65,
+        "format": "jpeg",
+        "enable_frame_skip": true,
+        "adaptive_quality": true,
+        "cache_size": 60
+      },
+      "use_cases": ["mobile emulators", "android games", "ios games"],
+      "expected_latency_ms": "8-12",
+      "recommended_for": "Mid-range systems"
+    },
+
+    "retro_gaming": {
+      "name": "Retro Gaming",
+      "description": "For emulated retro games (NES, SNES, etc.)",
+      "mode": "balanced",
+      "config": {
+        "fps": 60,
+        "quality": 80,
+        "format": "png",
+        "enable_frame_skip": false,
+        "adaptive_quality": false,
+        "cache_size": 120
+      },
+      "use_cases": ["retro emulators", "pixel art games", "classic games"],
+      "expected_latency_ms": "8-12",
+      "recommended_for": "Any system (low resolution)"
+    },
+
+    "vr_gaming": {
+      "name": "VR Gaming",
+      "description": "High FPS for VR headset monitoring",
+      "mode": "performance",
+      "config": {
+        "fps": 90,
+        "quality": 45,
+        "format": "jpeg",
+        "enable_frame_skip": true,
+        "adaptive_quality": true,
+        "cache_size": 120
+      },
+      "use_cases": ["VR games", "headset mirroring", "VR development"],
+      "expected_latency_ms": "4-6",
+      "recommended_for": "High-end systems with GPU acceleration"
+    },
+
+    "recording": {
+      "name": "Recording / Replay",
+      "description": "Quality optimized for recording and replay",
+      "mode": "quality",
+      "config": {
+        "fps": 60,
+        "quality": 85,
+        "format": "png",
+        "enable_frame_skip": false,
+        "adaptive_quality": false,
+        "cache_size": 120
+      },
+      "use_cases": ["recording", "replay buffer", "highlights"],
+      "expected_latency_ms": "10-15",
+      "recommended_for": "High-end systems (storage intensive)"
+    },
+
+    "low_end_system": {
+      "name": "Low-End System",
+      "description": "Optimized for systems with limited resources",
+      "mode": "performance",
+      "config": {
+        "fps": 15,
+        "quality": 40,
+        "format": "jpeg",
+        "enable_frame_skip": true,
+        "adaptive_quality": true,
+        "cache_size": 30
+      },
+      "use_cases": ["old hardware", "low CPU", "integrated graphics"],
+      "expected_latency_ms": "15-25",
+      "recommended_for": "Low-end systems"
+    }
+  },
+
+  "game_specific_presets": {
+    "counter_strike": {
+      "name": "Counter-Strike (CS:GO/CS2)",
+      "parent": "competitive_gaming",
+      "overrides": {
+        "fps": 60,
+        "quality": 55,
+        "window_title": "Counter-Strike"
+      },
+      "notes": "Optimized for fast-paced FPS with quick reactions"
+    },
+
+    "league_of_legends": {
+      "name": "League of Legends",
+      "parent": "competitive_gaming",
+      "overrides": {
+        "fps": 30,
+        "quality": 65,
+        "window_title": "League of Legends"
+      },
+      "notes": "MOBA games don't require ultra-high FPS"
+    },
+
+    "minecraft": {
+      "name": "Minecraft",
+      "parent": "casual_gaming",
+      "overrides": {
+        "fps": 30,
+        "quality": 70,
+        "window_title": "Minecraft"
+      },
+      "notes": "Balanced settings for building and exploration"
+    },
+
+    "valorant": {
+      "name": "Valorant",
+      "parent": "competitive_gaming",
+      "overrides": {
+        "fps": 60,
+        "quality": 50,
+        "window_title": "VALORANT"
+      },
+      "notes": "Tactical shooter requiring high FPS"
+    },
+
+    "fortnite": {
+      "name": "Fortnite",
+      "parent": "competitive_gaming",
+      "overrides": {
+        "fps": 60,
+        "quality": 50,
+        "window_title": "Fortnite"
+      },
+      "notes": "Battle royale with fast building mechanics"
+    },
+
+    "dota2": {
+      "name": "Dota 2",
+      "parent": "competitive_gaming",
+      "overrides": {
+        "fps": 30,
+        "quality": 65,
+        "window_title": "Dota 2"
+      },
+      "notes": "MOBA with detailed graphics"
+    }
+  },
+
+  "usage_guide": {
+    "loading_presets": "Use the preset name with enable_gaming_mode() MCP tool",
+    "examples": [
+      "enable_gaming_mode(mode='performance')",
+      "Use 'competitive_gaming' preset for FPS games",
+      "Use 'casual_gaming' preset for turn-based games",
+      "Use 'esports' preset for professional play"
+    ],
+    "customization": "Override individual settings using enable_gaming_mode() parameters",
+    "window_capture": "Use find_game_window() and capture_game_window() for region optimization"
+  },
+
+  "performance_tips": {
+    "windows": [
+      "Install pywin32 for window capture optimization",
+      "Use DXGI/WGC backends for GPU-accelerated capture",
+      "Close background applications to reduce CPU usage",
+      "Use window capture instead of full screen when possible"
+    ],
+    "general": [
+      "Enable adaptive quality for automatic optimization",
+      "Use JPEG format for better performance (vs PNG)",
+      "Lower quality setting if experiencing frame drops",
+      "Monitor performance with get_gaming_metrics() tool",
+      "Use frame skipping to maintain stable FPS"
+    ],
+    "network": [
+      "Use WebSocket endpoint (/mcp/game-stream) for lowest latency",
+      "Enable frame skipping to prevent latency accumulation",
+      "Monitor metrics endpoint to track performance"
+    ]
+  }
+}

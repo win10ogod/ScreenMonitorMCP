@@ -373,14 +373,16 @@ _stream_metrics: Dict[str, Any] = {}  # Performance metrics per stream
 
 
 async def _auto_push_stream_frames(stream_id: str, interval: float = 1.0):
-    """Automatically push stream frames to SSE clients with frame skipping.
+    """Automatically push stream frames to SSE clients with frame skipping and adaptive quality.
 
     Args:
         stream_id: Stream ID to push frames from
         interval: Interval between frames in seconds
     """
     import time
-    from .gaming_mode import FrameSkipper, FrameMetrics
+    import psutil
+    from .gaming_mode import FrameSkipper, FrameMetrics, AdaptiveQualityController
+    from ..server.config import config
 
     logger.info(f"Starting auto-push for stream {stream_id} at {1.0/interval:.1f} FPS")
 
@@ -392,6 +394,18 @@ async def _auto_push_stream_frames(stream_id: str, interval: float = 1.0):
     )
     metrics = FrameMetrics(window_size=100)
     _stream_metrics[stream_id] = metrics
+
+    # Initialize adaptive quality controller if enabled
+    adaptive_quality = None
+    current_quality = 75  # Default quality
+    if config.gaming_adaptive_quality:
+        adaptive_quality = AdaptiveQualityController(
+            target_fps=int(1.0 / interval),
+            min_quality=30,
+            max_quality=95,
+            adjustment_step=5
+        )
+        logger.info(f"Adaptive quality enabled for stream {stream_id}")
 
     last_frame_time = time.time()
 
@@ -412,10 +426,23 @@ async def _auto_push_stream_frames(stream_id: str, interval: float = 1.0):
                 await asyncio.sleep(interval * 0.5)  # Brief sleep before next check
                 continue
 
+            # Adjust quality if adaptive quality is enabled
+            if adaptive_quality and metrics.total_frames > 10:  # Wait for metrics to stabilize
+                current_fps = metrics.get_current_fps()
+                cpu_usage = psutil.cpu_percent(interval=0.01)  # Quick CPU check
+                new_quality = adaptive_quality.adjust(current_fps, cpu_usage)
+                if new_quality != current_quality:
+                    current_quality = new_quality
+                    logger.debug(f"Stream {stream_id} quality adjusted to {current_quality}% "
+                               f"(FPS: {current_fps:.1f}, CPU: {cpu_usage:.1f}%)")
+
             # Capture frame
             capture_start = time.time()
             monitor = stream_info.get("monitor", 0)
-            capture_result = await screen_capture.capture_screen(monitor)
+            capture_result = await screen_capture.capture_screen(
+                monitor,
+                quality=current_quality if stream_info.get('format') == 'jpeg' else 100
+            )
             capture_time = (time.time() - capture_start) * 1000  # ms
 
             if capture_result.get("success"):
@@ -459,11 +486,13 @@ async def _auto_push_stream_frames(stream_id: str, interval: float = 1.0):
                 # Log performance every 60 frames
                 if metrics.total_frames % 60 == 0:
                     stats = metrics.get_stats()
+                    quality_info = f", quality={current_quality}%" if adaptive_quality else ""
                     logger.info(f"Stream {stream_id} performance: "
                               f"{stats['current_fps']:.1f} FPS, "
                               f"{stats['avg_frame_time_ms']:.1f}ms/frame, "
                               f"{stats['drop_rate_percent']:.1f}% dropped, "
-                              f"{stats['skip_rate_percent']:.1f}% skipped")
+                              f"{stats['skip_rate_percent']:.1f}% skipped"
+                              f"{quality_info}")
 
             # Wait for next frame
             elapsed = time.time() - frame_start
