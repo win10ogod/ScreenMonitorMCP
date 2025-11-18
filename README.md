@@ -161,14 +161,19 @@ Note: This approach is deprecated. Use the recommended client-side analysis inst
 - `get_system_status` - Overall system status
 - `get_capture_backend_info` - Screenshot backend status (MSS/DXGI/WGC)
 
-### Streaming (HTTP Mode Only)
+### Streaming
 
-**Note**: Streaming is designed for HTTP/WebSocket mode. For MCP mode, use `capture_screen` for single screenshots.
-
-- `create_stream` - Start live screen streaming (HTTP mode)
+- `create_stream` - Create a new streaming session
+- `capture_stream_frame` - Capture current frame from stream (returns resource URI)
 - `list_streams` - List active streams
 - `stop_stream` - Stop a stream
 - `get_stream_info` - Get stream information
+
+**MCP Mode Usage:**
+1. Create stream with `create_stream(monitor=0, fps=10, quality=75)`
+2. Capture frames with `capture_stream_frame(stream_id)`
+3. Each frame returns a resource URI for automatic display
+4. Stop with `stop_stream(stream_id)` when done
 
 ### Memory & Database
 
