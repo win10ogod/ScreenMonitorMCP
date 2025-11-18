@@ -70,27 +70,129 @@ mcp = FastMCP("screenmonitormcp-v2")
 # Initialize components
 screen_capture = ScreenCapture()
 
+# Image cache for MCP resources (stores recent captures)
+from collections import OrderedDict
+import hashlib
+_image_cache = OrderedDict()  # {resource_uri: (image_data, mime_type, metadata)}
+_MAX_CACHE_SIZE = 10  # Keep last 10 captures
+
+def _add_to_cache(image_data: str, mime_type: str, metadata: dict) -> str:
+    """Add image to cache and return resource URI."""
+    # Generate unique ID based on timestamp and monitor
+    timestamp = metadata.get("timestamp", datetime.now().isoformat())
+    monitor = metadata.get("monitor", 0)
+    resource_id = hashlib.md5(f"{timestamp}_{monitor}".encode()).hexdigest()[:12]
+    resource_uri = f"screen://capture/{resource_id}"
+
+    # Add to cache
+    _image_cache[resource_uri] = (image_data, mime_type, metadata)
+
+    # Maintain cache size limit
+    while len(_image_cache) > _MAX_CACHE_SIZE:
+        _image_cache.popitem(last=False)  # Remove oldest
+
+    return resource_uri
+
+@mcp.resource("screen://capture/{capture_id}")
+async def get_screen_capture(uri: str) -> str:
+    """Get a captured screen image by resource URI.
+
+    This resource provides the actual image data for captures.
+    Use capture_screen tool to create new captures.
+    """
+    if uri not in _image_cache:
+        raise ValueError(f"Capture not found: {uri}")
+
+    image_data, mime_type, metadata = _image_cache[uri]
+
+    # Return image data with proper MIME type
+    # MCP will handle base64 encoding automatically
+    return image_data
+
 @mcp.tool()
-async def capture_screen_image(
+async def capture_screen(
     monitor: int = 0,
     format: str = "png",
-    quality: int = 85,
-    include_metadata: bool = True
+    quality: int = 85
 ) -> str:
-    """Capture screen and return raw image data for client-side analysis
+    """Capture screen and return resource URI (NOT base64 data)
 
-    This is the RECOMMENDED approach - capture the image and let the MCP client
-    (like Claude Desktop) analyze it using its own vision capabilities. This is
-    more secure, simpler, and doesn't require external API keys.
+    This is the RECOMMENDED approach - returns a resource URI that can be
+    used to fetch the actual image data. This avoids sending large base64
+    data in the tool response.
 
     Args:
         monitor: Monitor number to capture (0 for primary)
         format: Image format (png or jpeg)
         quality: Image quality for JPEG (1-100)
-        include_metadata: Include capture metadata
 
     Returns:
-        JSON string with image data and metadata
+        JSON with resource URI and metadata (without embedded image data)
+    """
+    try:
+        capture_result = await screen_capture.capture_screen(monitor)
+        if not capture_result.get("success"):
+            return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
+
+        # Prepare metadata
+        metadata = {
+            "timestamp": datetime.now().isoformat(),
+            "monitor": monitor,
+            "width": capture_result.get("width"),
+            "height": capture_result.get("height"),
+            "format": format,
+            "quality": quality if format == "jpeg" else 100
+        }
+
+        # Determine MIME type
+        mime_type = f"image/{format}"
+
+        # Add to cache and get resource URI
+        resource_uri = _add_to_cache(
+            capture_result["image_data"],
+            mime_type,
+            metadata
+        )
+
+        import json
+        result = {
+            "success": True,
+            "resource_uri": resource_uri,
+            "mime_type": mime_type,
+            "metadata": metadata,
+            "note": "Use the resource_uri to fetch the actual image data via MCP resources"
+        }
+
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Screen capture failed: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def capture_screen_base64(
+    monitor: int = 0,
+    format: str = "jpeg",
+    quality: int = 50,
+    max_width: int = 1280
+) -> str:
+    """Capture screen and return base64 data (LEGACY, for compatibility)
+
+    WARNING: This returns large base64 data in the response.
+    For better performance, use capture_screen() which returns a resource URI instead.
+
+    This method includes automatic image compression to reduce size:
+    - Default format: JPEG (smaller than PNG)
+    - Default quality: 50 (good balance between size and quality)
+    - Default max_width: 1280 (scales down large screenshots)
+
+    Args:
+        monitor: Monitor number to capture (0 for primary)
+        format: Image format (png or jpeg, default: jpeg)
+        quality: Image quality for JPEG (1-100, default: 50)
+        max_width: Maximum width in pixels (scales down if larger, default: 1280)
+
+    Returns:
+        JSON string with compressed image base64 data and metadata
     """
     try:
         capture_result = await screen_capture.capture_screen(monitor)
@@ -98,20 +200,59 @@ async def capture_screen_image(
             return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
 
         import json
+        from PIL import Image
+        import io
+
+        # Decode and potentially resize image
+        image_data = capture_result["image_data"]
+        width = capture_result.get("width", 0)
+        height = capture_result.get("height", 0)
+
+        # If image is too large, resize it
+        if width > max_width:
+            # Decode base64 to PIL Image
+            img_bytes = base64.b64decode(image_data)
+            img = Image.open(io.BytesIO(img_bytes))
+
+            # Calculate new dimensions maintaining aspect ratio
+            ratio = max_width / width
+            new_height = int(height * ratio)
+
+            # Resize
+            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+
+            # Re-encode with specified format and quality
+            buffer = io.BytesIO()
+            if format.lower() == "jpeg":
+                img.convert("RGB").save(buffer, format="JPEG", quality=quality, optimize=True)
+            else:
+                img.save(buffer, format="PNG", optimize=True)
+
+            image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            width = max_width
+            height = new_height
+        elif format.lower() == "jpeg" and quality < 85:
+            # Re-compress even if size is OK, to reduce quality
+            img_bytes = base64.b64decode(image_data)
+            img = Image.open(io.BytesIO(img_bytes))
+
+            buffer = io.BytesIO()
+            img.convert("RGB").save(buffer, format="JPEG", quality=quality, optimize=True)
+            image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
         result = {
             "success": True,
-            "image_base64": capture_result["image_data"],
+            "image_base64": image_data,
             "format": format,
-            "monitor": monitor
-        }
-
-        if include_metadata:
-            result["metadata"] = {
+            "monitor": monitor,
+            "metadata": {
                 "timestamp": datetime.now().isoformat(),
-                "width": capture_result.get("width"),
-                "height": capture_result.get("height"),
-                "quality": quality if format == "jpeg" else 100
+                "width": width,
+                "height": height,
+                "quality": quality if format == "jpeg" else 100,
+                "compressed": True
             }
+        }
 
         return json.dumps(result, indent=2)
     except Exception as e:
