@@ -187,6 +187,30 @@ print(f"Average capture time: {stats['avg_capture_time_ms']}ms")
 - 📊 Low-frequency monitoring
 - 🔧 Simple automation tasks
 
+### 🐛 Bug Fixes
+
+**Critical Runtime Fixes:**
+- 🔧 **Logger Initialization Bug** (CRITICAL): Fixed `NameError: name 'logger' is not defined` in `mcp_server.py`
+  - Logger was used at lines 53/55/57 before being initialized at line 60
+  - Moved logger initialization to line 27 (before first use)
+  - This prevented MCP server from starting - now fixed
+- 🔧 **WGC Error Handling**: Made Windows Graphics Capture errors silent and graceful
+  - Changed all WGC error logs from ERROR/WARNING to DEBUG level
+  - WGC is optional, errors should not prevent server startup
+  - Added better exception handling for missing `System.Runtime.WindowsRuntime` dependencies
+  - Server now starts successfully even when WGC dependencies unavailable
+- 🔧 **Optional Dependency Support**: Made HTTP server dependencies optional for MCP-only mode
+  - Changed `create_app` import to lazy loading in `__init__.py`
+  - MCP mode no longer requires `structlog` and other HTTP-only dependencies
+  - Enables minimal installation: `pip install screenmonitormcp-v2` + `pip install mcp`
+  - HTTP mode still requires full dependency set when needed
+
+**Impact:**
+- ✅ Server now starts reliably in all configurations
+- ✅ Optional features fail gracefully without breaking core functionality
+- ✅ Better separation between MCP-only and HTTP server modes
+- ✅ Reduced installation size for users who only need MCP functionality
+
 ---
 
 ## [2.4.0] - 2025-11-18 **PERFORMANCE RELEASE**
