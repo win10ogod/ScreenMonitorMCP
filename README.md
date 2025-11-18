@@ -5,7 +5,18 @@
 [![Python](https://img.shields.io/pypi/pyversions/screenmonitormcp-v2.svg)](https://pypi.org/project/screenmonitormcp-v2/)
 [![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/a2dbda0f-f46d-40e1-9c13-0b47eff9df3a)
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/inkbytefo-screenmonitormcp-badge.png)](https://mseep.ai/app/inkbytefo-screenmonitormcp)
-A powerful Model Context Protocol (MCP) server that gives AI real-time vision capabilities and enhanced UI intelligence. Transform your AI assistant into a visual powerhouse that can see, analyze, and interact with your screen content.
+
+A powerful Model Context Protocol (MCP) server that gives AI assistants real-time vision capabilities through screen capture. Let your AI see your screen - the AI assistant analyzes what it sees using its own vision capabilities.
+
+## 🎯 Recommended Architecture (v2.1+)
+
+**ScreenMonitorMCP now follows MCP best practices:**
+- **Server captures** screenshots and returns raw image data
+- **Your MCP client** (like Claude Desktop) analyzes images with its own vision model
+- **No external AI APIs** required - more secure, simpler, and privacy-focused
+- **No API key management** - works out of the box
+
+This approach is more secure, conventional, and follows the Model Context Protocol philosophy.
 
 ## What is ScreenMonitorMCP?
 
@@ -36,14 +47,29 @@ pip install -e .
 
 ### Configuration
 
-1. Create a `.env` file with your AI service credentials:
+**Recommended (Simpler & More Secure):**
 
-```env
-OPENAI_API_KEY=your-api-key-here
-OPENAI_MODEL=gpt-4o
+Add to your Claude Desktop config - No API keys needed!
+
+```json
+{
+  "mcpServers": {
+    "screenmonitormcp-v2": {
+      "command": "python",
+      "args": ["-m", "screenmonitormcp_v2.mcp_main"]
+    }
+  }
+}
 ```
 
-2. Add to your Claude Desktop config:
+Restart Claude Desktop and start using:
+- Use `capture_screen_image` tool to capture screenshots
+- Claude will analyze the images with its own vision model
+- No configuration, no API keys, no complexity!
+
+**Alternative (Legacy - Requires External AI API):**
+
+If you want to use the deprecated server-side AI analysis tools, configure:
 
 ```json
 {
@@ -53,23 +79,43 @@ OPENAI_MODEL=gpt-4o
       "args": ["-m", "screenmonitormcp_v2.mcp_main"],
       "env": {
         "OPENAI_API_KEY": "your-openai-api-key-here",
-        "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
-        "OPENAI_MODEL": "qwen/qwen2.5-vl-32b-instruct:free"
+        "OPENAI_BASE_URL": "https://api.openai.com/v1",
+        "OPENAI_MODEL": "gpt-4o"
       }
     }
   }
 }
 ```
 
-3. Restart Claude Desktop and start capturing!
+Note: This approach is deprecated. Use the recommended client-side analysis instead.
 
 ## Available Tools
 
-- `capture_screen` - Take screenshots of any monitor
-- `analyze_screen` - AI-powered screen content analysis
-- `analyze_image` - Analyze any image with AI vision
+### Recommended (Client-Side Analysis)
+
+- **`capture_screen_image`** - Capture screenshot and return raw image data for your AI client to analyze
+  - No API keys required
+  - More secure and private
+  - Uses your MCP client's built-in vision capabilities
+
+### Streaming & Monitoring
+
 - `create_stream` - Start live screen streaming
+- `list_streams` - List active streams
+- `stop_stream` - Stop a stream
 - `get_performance_metrics` - System health monitoring
+- `get_system_status` - Overall system status
+
+### Legacy Tools (Deprecated - Require External AI API)
+
+- `analyze_screen` - Server-side AI analysis (deprecated)
+- `detect_ui_elements` - UI element detection (deprecated)
+- `assess_system_performance` - Performance assessment (deprecated)
+- `detect_anomalies` - Anomaly detection (deprecated)
+- `generate_monitoring_report` - Generate reports (deprecated)
+- `chat_completion` - Chat completion (deprecated)
+
+**Note:** Legacy tools are maintained for backward compatibility but are not recommended for new implementations.
 
 ## Use Cases
 

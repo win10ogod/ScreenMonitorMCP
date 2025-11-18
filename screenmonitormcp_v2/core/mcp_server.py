@@ -54,7 +54,53 @@ mcp = FastMCP("screenmonitormcp-v2")
 # Initialize components
 screen_capture = ScreenCapture()
 
-# capture_screen function removed
+@mcp.tool()
+async def capture_screen_image(
+    monitor: int = 0,
+    format: str = "png",
+    quality: int = 85,
+    include_metadata: bool = True
+) -> str:
+    """Capture screen and return raw image data for client-side analysis
+
+    This is the RECOMMENDED approach - capture the image and let the MCP client
+    (like Claude Desktop) analyze it using its own vision capabilities. This is
+    more secure, simpler, and doesn't require external API keys.
+
+    Args:
+        monitor: Monitor number to capture (0 for primary)
+        format: Image format (png or jpeg)
+        quality: Image quality for JPEG (1-100)
+        include_metadata: Include capture metadata
+
+    Returns:
+        JSON string with image data and metadata
+    """
+    try:
+        capture_result = await screen_capture.capture_screen(monitor)
+        if not capture_result.get("success"):
+            return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
+
+        import json
+        result = {
+            "success": True,
+            "image_base64": capture_result["image_data"],
+            "format": format,
+            "monitor": monitor
+        }
+
+        if include_metadata:
+            result["metadata"] = {
+                "timestamp": datetime.now().isoformat(),
+                "width": capture_result.get("width"),
+                "height": capture_result.get("height"),
+                "quality": quality if format == "jpeg" else 100
+            }
+
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Screen capture failed: {e}")
+        return f"Error: {str(e)}"
 
 @mcp.tool()
 async def analyze_screen(
@@ -62,27 +108,43 @@ async def analyze_screen(
     monitor: int = 0,
     detail_level: str = "high"
 ) -> str:
-    """Analyze the current screen content using AI vision
-    
+    """[DEPRECATED] Analyze screen using external AI service
+
+    NOTE: This tool requires external AI API configuration (OpenAI/OpenRouter).
+    RECOMMENDED: Use 'capture_screen_image' instead and let your MCP client
+    analyze the image with its own vision capabilities. This is more secure
+    and doesn't require managing API keys.
+
     Args:
         query: What to analyze or look for in the screen
         monitor: Monitor number to analyze (0 for primary)
         detail_level: Level of detail for analysis (low or high)
-    
+
     Returns:
-        Analysis result as text
+        Analysis result as text or error if AI not configured
     """
     try:
         if not ai_service.is_available():
-            return "Error: AI service is not available. Please configure your AI provider."
-        
+            return """Error: External AI service is not configured.
+
+RECOMMENDED ALTERNATIVE: Use the 'capture_screen_image' tool instead, which returns
+the raw image data. Your MCP client (like Claude Desktop) can then analyze it using
+its own vision capabilities without requiring external API keys.
+
+Example usage:
+1. Call capture_screen_image(monitor=0)
+2. Your client receives the base64 image
+3. Your client analyzes it using its built-in vision model
+
+This approach is more secure, simpler, and follows MCP best practices."""
+
         capture_result = await screen_capture.capture_screen(monitor)
         if not capture_result.get("success"):
             return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
-        
+
         image_base64 = capture_result["image_data"]
         result = await ai_service.analyze_image(image_base64, query)
-        
+
         if result.get("success"):
             return result.get("response", "No analysis available")
         else:
@@ -100,23 +162,27 @@ async def chat_completion(
     max_tokens: int = 1000,
     temperature: float = 0.7
 ) -> str:
-    """Generate chat completion using AI models
-    
+    """[DEPRECATED] Generate chat completion using external AI service
+
+    NOTE: This tool requires external AI API configuration.
+    Your MCP client already has chat capabilities built-in, so this tool
+    is typically unnecessary. Use your client's native chat features instead.
+
     Args:
         messages: Array of chat messages with role and content
         model: AI model to use
         max_tokens: Maximum tokens for response
         temperature: Temperature for response generation
-    
+
     Returns:
-        AI response as text
+        AI response as text or error if not configured
     """
     try:
         if not ai_service.is_available():
-            return "Error: AI service is not available. Please configure your AI provider."
-        
+            return "Error: External AI service not configured. Use your MCP client's native chat instead."
+
         result = await ai_service.chat_completion(messages, model, max_tokens, temperature)
-        
+
         if result.get("success"):
             return result.get("response", "No response available")
         else:
@@ -603,25 +669,33 @@ async def database_pool_health_check() -> str:
 async def detect_ui_elements(
     monitor: int = 0
 ) -> str:
-    """Detect and classify UI elements in the current screen
-    
+    """[DEPRECATED] Detect UI elements using external AI service
+
+    RECOMMENDED: Use 'capture_screen_image' and ask your MCP client to detect
+    UI elements. For example: "Look at this image and identify all UI elements."
+
     Args:
         monitor: Monitor number to analyze (0 for primary)
-    
+
     Returns:
-        UI elements detection results as text
+        UI elements detection results or suggestion to use client-side analysis
     """
     try:
         if not ai_service.is_available():
-            return "Error: AI service is not available. Please configure your AI provider."
-        
+            return """Error: External AI service not configured.
+
+RECOMMENDED: Use 'capture_screen_image' instead:
+1. Call capture_screen_image(monitor=0)
+2. Ask your MCP client: "Identify all UI elements in this screenshot"
+3. Your client will analyze it using its own vision model"""
+
         capture_result = await screen_capture.capture_screen(monitor)
         if not capture_result.get("success"):
             return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
-        
+
         image_base64 = capture_result["image_data"]
         result = await ai_service.detect_ui_elements(image_base64)
-        
+
         if result.get("success"):
             return result.get("response", "No analysis available")
         else:
@@ -634,25 +708,30 @@ async def detect_ui_elements(
 async def assess_system_performance(
     monitor: int = 0
 ) -> str:
-    """Assess system performance indicators visible on screen
-    
+    """[DEPRECATED] Assess system performance using external AI service
+
+    RECOMMENDED: Use 'capture_screen_image' and ask your MCP client to assess
+    the system performance shown in the screenshot.
+
     Args:
         monitor: Monitor number to analyze (0 for primary)
-    
+
     Returns:
-        Performance assessment results as text
+        Performance assessment or suggestion to use client-side analysis
     """
     try:
         if not ai_service.is_available():
-            return "Error: AI service is not available. Please configure your AI provider."
-        
+            return """Error: External AI service not configured.
+
+RECOMMENDED: Use 'capture_screen_image' and ask your client to analyze performance metrics."""
+
         capture_result = await screen_capture.capture_screen(monitor)
         if not capture_result.get("success"):
             return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
-        
+
         image_base64 = capture_result["image_data"]
         result = await ai_service.assess_system_performance(image_base64)
-        
+
         if result.get("success"):
             return result.get("response", "No analysis available")
         else:
@@ -666,26 +745,31 @@ async def detect_anomalies(
     monitor: int = 0,
     baseline_description: str = ""
 ) -> str:
-    """Detect visual anomalies and unusual patterns in the screen
-    
+    """[DEPRECATED] Detect anomalies using external AI service
+
+    RECOMMENDED: Use 'capture_screen_image' and ask your MCP client to detect
+    anomalies or unusual patterns in the screenshot.
+
     Args:
         monitor: Monitor number to analyze (0 for primary)
         baseline_description: Optional description of normal state for comparison
-    
+
     Returns:
-        Anomaly detection results as text
+        Anomaly detection results or suggestion to use client-side analysis
     """
     try:
         if not ai_service.is_available():
-            return "Error: AI service is not available. Please configure your AI provider."
-        
+            return """Error: External AI service not configured.
+
+RECOMMENDED: Use 'capture_screen_image' and ask your client to detect anomalies."""
+
         capture_result = await screen_capture.capture_screen(monitor)
         if not capture_result.get("success"):
             return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
-        
+
         image_base64 = capture_result["image_data"]
         result = await ai_service.detect_anomalies(image_base64, baseline_description)
-        
+
         if result.get("success"):
             return result.get("response", "No analysis available")
         else:
@@ -699,26 +783,31 @@ async def generate_monitoring_report(
     monitor: int = 0,
     context: str = ""
 ) -> str:
-    """Generate comprehensive monitoring report from screen analysis
-    
+    """[DEPRECATED] Generate monitoring report using external AI service
+
+    RECOMMENDED: Use 'capture_screen_image' and ask your MCP client to generate
+    a comprehensive monitoring report based on the screenshot.
+
     Args:
         monitor: Monitor number to analyze (0 for primary)
         context: Additional context for the report
-    
+
     Returns:
-        Comprehensive monitoring report as text
+        Monitoring report or suggestion to use client-side analysis
     """
     try:
         if not ai_service.is_available():
-            return "Error: AI service is not available. Please configure your AI provider."
-        
+            return """Error: External AI service not configured.
+
+RECOMMENDED: Use 'capture_screen_image' and ask your client to generate a monitoring report."""
+
         capture_result = await screen_capture.capture_screen(monitor)
         if not capture_result.get("success"):
             return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
-        
+
         image_base64 = capture_result["image_data"]
         result = await ai_service.generate_monitoring_report(image_base64, context)
-        
+
         if result.get("success"):
             return result.get("response", "No analysis available")
         else:
