@@ -1268,70 +1268,87 @@ print(f"Active connections: {stats['active_connections']}")
 
 ## Important Architectural Considerations
 
-### External AI Dependency
+### ✅ External AI Dependency - RESOLVED (v2.1+)
 
-**Current Design:**
-- Requires external AI API (OpenAI, OpenRouter, etc.)
-- Adds complexity with API keys and external dependencies
-- Potential security concerns with API key management
+**Previous Design (v2.0.x - Deprecated):**
+- Required external AI API (OpenAI, OpenRouter, etc.)
+- Added complexity with API keys and external dependencies
+- Security concerns with API key management
 - Additional costs for API usage
 
-**⚠️ Architectural Concern:**
+**⚠️ Architectural Concern Raised:**
 
-> **From Code Review:** "I think requiring additional models is not good. We should try to let the MCP client execute completely - this is safer and more conventional."
+> "I think requiring additional models is not good. We should try to let the MCP client execute completely - this is safer and more conventional."
 
-**Proposed Improvement:**
+**✅ NEW Architecture (v2.1+ - IMPLEMENTED):**
 
-The system should be refactored to leverage the MCP client's built-in AI capabilities rather than requiring external AI services. This would:
+The system has been refactored to follow MCP best practices by leveraging the MCP client's built-in AI capabilities:
 
-1. **Simplify Security**: No API key management needed
-2. **Reduce Dependencies**: Remove `openai` library requirement
-3. **Improve Privacy**: No data sent to external services
-4. **Lower Costs**: No API usage fees
-5. **Better Integration**: Let Claude Desktop or other MCP clients handle analysis
+1. **✅ Simplified Security**: No API key management needed
+2. **✅ Reduced Dependencies**: OpenAI API is now optional
+3. **✅ Improved Privacy**: No data sent to external services by default
+4. **✅ Lower Costs**: No API usage fees required
+5. **✅ Better Integration**: Claude Desktop and other MCP clients handle analysis
 
-**Refactoring Strategy:**
+**Implementation:**
 
-Instead of:
+**NEW Recommended Tool:**
 ```python
-# Current: Server does AI analysis
-async def analyze_screen(monitor_id: int, prompt: str) -> str:
-    capture = await screen_capture.capture_screen(monitor_id)
-    analysis = await ai_service.analyze_image(capture["image"], prompt)
-    return analysis
-```
+@mcp.tool()
+async def capture_screen_image(
+    monitor: int = 0,
+    format: str = "png",
+    quality: int = 85,
+    include_metadata: bool = True
+) -> str:
+    """Capture screen and return raw image data for client-side analysis
 
-Transition to:
-```python
-# Proposed: Return image data, let client analyze
-async def capture_screen_for_analysis(monitor_id: int) -> Dict:
-    """Capture screen and return image for client-side analysis"""
-    capture = await screen_capture.capture_screen(monitor_id)
-    return {
-        "image_base64": capture["image"],
-        "format": capture["format"],
+    This is the RECOMMENDED approach - capture the image and let the MCP client
+    (like Claude Desktop) analyze it using its own vision capabilities.
+    """
+    capture = await screen_capture.capture_screen(monitor)
+    return json.dumps({
+        "success": True,
+        "image_base64": capture["image_data"],
+        "format": format,
+        "monitor": monitor,
         "metadata": {
-            "monitor": monitor_id,
-            "width": capture["width"],
-            "height": capture["height"],
-            "timestamp": capture["timestamp"]
+            "timestamp": datetime.now().isoformat(),
+            "width": capture.get("width"),
+            "height": capture.get("height")
         }
-    }
+    })
 ```
 
-Then the MCP client (Claude Desktop) would:
-1. Call `capture_screen_for_analysis` tool
-2. Receive base64 image data
-3. Analyze image using its own vision model
-4. Return analysis to user
+**Workflow:**
+1. User asks Claude: "What's on my screen?"
+2. Claude calls `capture_screen_image(monitor=0)`
+3. Tool returns base64 image data
+4. Claude analyzes image using its own vision model
+5. Claude responds with analysis
 
-**Benefits:**
-- **Simpler**: No external API configuration
-- **Safer**: API keys not needed
-- **Standard**: Follows MCP best practices
-- **Flexible**: Works with any vision-capable MCP client
+**Legacy Tools (Deprecated but maintained):**
+- `analyze_screen` - Marked as deprecated, requires external AI
+- `detect_ui_elements` - Marked as deprecated
+- `assess_system_performance` - Marked as deprecated
+- `detect_anomalies` - Marked as deprecated
+- `generate_monitoring_report` - Marked as deprecated
+- `chat_completion` - Marked as deprecated
 
-**Implementation Priority:** High - This is a significant architectural improvement that should be considered for future versions.
+All deprecated tools now display helpful messages guiding users to use `capture_screen_image` instead.
+
+**Migration Path:**
+- Existing users can continue using legacy tools if they have AI API configured
+- New users should use `capture_screen_image` (no configuration needed)
+- See MIGRATION.md for detailed upgrade instructions
+
+**Benefits Achieved:**
+- **Simpler Setup**: Works out of the box, no API keys needed
+- **More Secure**: No external API key management
+- **Standard Compliance**: Follows MCP protocol best practices
+- **Privacy-Focused**: Images not sent to external services
+- **Cost-Free**: No AI API usage charges
+- **Better Performance**: Direct client analysis, no network latency
 
 ### Other Design Considerations
 
