@@ -50,19 +50,19 @@ ScreenMonitorMCP v2.5+ includes optional Windows-specific optimizations for **4-
 Windows optimization works automatically if you install the optional packages:
 
 ```bash
-# For DXGI Desktop Duplication (RECOMMENDED - fully working):
-pip install dxcam
+# For DXGI Desktop Duplication (240+ FPS capable - RECOMMENDED):
+pip install screenmonitormcp-v2[windows-perf]
 
-# For Windows Graphics Capture (framework support):
-pip install pythonnet
+# For Windows Graphics Capture (async-based, modern API):
+pip install screenmonitormcp-v2[windows-wgc]
 
 # Install both for maximum compatibility:
-pip install dxcam pythonnet
+pip install screenmonitormcp-v2[windows-all]
 ```
 
 **Implementation Status:**
-- ✅ **DXGI (via dxcam)**: Fully implemented - 1-5ms GPU-accelerated capture
-- ⚙️ **WGC (via pythonnet)**: Framework ready - full implementation requires complex WinRT interop
+- ✅ **DXGI (via dxcam)**: Fully implemented - 1-5ms capture, 240+ FPS, multi-monitor
+- ✅ **WGC (via winsdk)**: Fully implemented - 1-5ms async capture, modern API
 - ✅ **MSS**: Always available - 20-50ms CPU-based capture
 
 **Note**: These packages are optional. ScreenMonitorMCP works perfectly without them using the cross-platform MSS backend.
