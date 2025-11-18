@@ -46,20 +46,21 @@ http = [
     "uvicorn[standard]>=0.24.0",
     "openai>=1.3.0",
 ]
-# Windows GPU-accelerated screen capture optimization
+# Windows GPU-accelerated screen capture optimization (DXGI - fully working)
 windows-perf = [
-    "dxcam>=0.0.5",      # DXGI Desktop Duplication (1-5ms capture)
+    "dxcam>=0.0.5",      # DXGI Desktop Duplication (1-5ms capture, 240+ FPS)
     "numpy>=1.21.0",     # Required by dxcam
 ]
-# Windows Graphics Capture framework (advanced)
+# Windows Graphics Capture (WGC - fully working)
 windows-wgc = [
-    "pythonnet>=3.0.0",  # Windows Graphics Capture API access
+    "winsdk>=1.0.0b10",  # Windows Graphics Capture API (modern WinRT bindings)
+    "numpy>=1.21.0",     # Required for image processing
 ]
-# All Windows optimizations
+# All Windows optimizations (DXGI + WGC - both fully working)
 windows-all = [
-    "dxcam>=0.0.5",
-    "numpy>=1.21.0",
-    "pythonnet>=3.0.0",
+    "dxcam>=0.0.5",      # DXGI - 240+ FPS capable
+    "winsdk>=1.0.0b10",  # WGC - Modern async API
+    "numpy>=1.21.0",     # Required by both backends
 ]
 # All features (HTTP + AI + Windows optimization)
 all = [
@@ -67,8 +68,8 @@ all = [
     "uvicorn[standard]>=0.24.0",
     "openai>=1.3.0",
     "dxcam>=0.0.5",
+    "winsdk>=1.0.0b10",
     "numpy>=1.21.0",
-    "pythonnet>=3.0.0",
 ]
 # Development tools
 dev = [
