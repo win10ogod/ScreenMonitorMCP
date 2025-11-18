@@ -5,6 +5,152 @@ All notable changes to ScreenMonitorMCP v2 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2025-11-18 **WINDOWS OPTIMIZATION RELEASE**
+
+### 🚀 Windows-Specific Performance Enhancements
+
+**Platform-Optimized Screen Capture:**
+- ✅ **Windows Graphics Capture (WGC) Support**: Modern, secure GPU-accelerated capture (Windows 10 1803+)
+  - Performance: ~1-5ms per capture (vs 20-50ms with traditional methods)
+  - Security: User authorization required for screen access
+  - Quality: Captures hardware-accelerated content (DirectX, OpenGL, Vulkan)
+  - Optimal for: Window-specific capture, secure applications
+- ✅ **DXGI Desktop Duplication Support**: High-performance GPU capture (Windows 8+)
+  - Performance: ~1-5ms per capture
+  - Quality: Full desktop duplication with GPU acceleration
+  - Optimal for: Full-screen capture, gaming, video content
+- ✅ **Intelligent Backend Selection**: Automatic fallback chain
+  - Priority 1: WGC (if available and user authorized)
+  - Priority 2: DXGI (if available)
+  - Priority 3: MSS (cross-platform fallback)
+- ✅ **Zero Breaking Changes**: Existing code works unchanged, optimizations applied automatically
+
+**New Module:**
+- `screenmonitormcp_v2/core/windows_capture.py`: Complete Windows optimization framework
+  - `WindowsCaptureBackend`: Abstract base class for platform backends
+  - `WGCCaptureBackend`: Windows Graphics Capture implementation
+  - `DXGICaptureBackend`: DXGI Desktop Duplication implementation
+  - `OptimizedWindowsCapture`: Automatic backend manager with fallback
+
+**Enhanced ScreenCapture Class:**
+- ✅ **Automatic Optimization Detection**: Checks for Windows optimization on initialization
+- ✅ **Transparent Optimization**: Uses optimized backends when available, MSS otherwise
+- ✅ **Enhanced Performance Metrics**:
+  - `windows_opt_captures`: Count of GPU-accelerated captures
+  - `mss_captures`: Count of traditional MSS captures
+  - `windows_opt_usage_percent`: Percentage using GPU acceleration
+  - `mss_usage_percent`: Percentage using MSS fallback
+- ✅ **Backend Information API**: New `get_backend_info()` method provides:
+  - Active backend identification (WGC/DXGI/MSS)
+  - Platform detection and optimization availability
+  - Installation recommendations for optimal performance
+  - Expected performance improvements
+
+**New MCP Tool:**
+- ✅ `get_capture_backend_info()`: Query active capture backend and optimization status
+  - Shows which backend is actively being used
+  - Displays performance statistics per backend
+  - Provides installation instructions for optimization packages
+  - Explains expected performance benefits
+
+### 📊 Performance Comparison
+
+**Traditional MSS (CPU-based):**
+- Capture Time: 20-50ms per frame
+- Method: GDI BitBlt (CPU rendering)
+- Limitations: Cannot capture hardware-accelerated content
+- Overhead: High CPU usage
+
+**Windows Optimization (GPU-based):**
+- Capture Time: 1-5ms per frame ⚡
+- Method: DirectX GPU acceleration
+- Benefits: Captures all content including DirectX/OpenGL
+- Overhead: Minimal (GPU-accelerated)
+
+**Expected Improvements:**
+- 🎯 **Speed**: 4-50x faster capture (1-5ms vs 20-50ms)
+- 🎯 **CPU Usage**: 70-90% lower CPU overhead
+- 🎯 **Quality**: Better for gaming, video, and hardware-accelerated content
+- 🎯 **Compatibility**: Falls back to MSS automatically if optimizations unavailable
+
+### 💡 Optional Dependencies
+
+Windows optimization requires optional packages (not mandatory):
+
+```bash
+# For Windows Graphics Capture (WGC):
+pip install pythonnet
+
+# For DXGI Desktop Duplication:
+pip install comtypes pywin32
+
+# Install both for maximum compatibility:
+pip install pythonnet comtypes pywin32
+```
+
+**Note**: System works without these packages using MSS fallback. Install only if you need maximum performance on Windows.
+
+### 🔧 Technical Implementation
+
+**Architecture:**
+- Modular backend system with clean abstraction
+- Platform detection at initialization
+- Graceful degradation to MSS if optimization unavailable
+- No breaking changes to existing APIs
+
+**Backward Compatibility:**
+- ✅ All existing code continues to work unchanged
+- ✅ No configuration changes required
+- ✅ Optimizations applied transparently
+- ✅ MSS fallback ensures cross-platform compatibility
+
+**Developer Experience:**
+- Check optimization status: `screen_capture.get_backend_info()`
+- Monitor backend usage: `screen_capture.get_performance_stats()`
+- Query via MCP: `get_capture_backend_info()` tool
+
+### 📈 Migration & Usage
+
+**No Migration Required!**
+- Existing code automatically benefits from optimizations if available
+- No API changes, no configuration changes needed
+- Install optional packages for optimization, or continue with MSS
+
+**Example Usage:**
+```python
+# Initialize (automatic optimization detection)
+from screenmonitormcp_v2.core.screen_capture import screen_capture
+
+# Capture (uses best available backend automatically)
+result = await screen_capture.capture_screen(monitor=0)
+
+# Check which backend was used
+backend_info = screen_capture.get_backend_info()
+print(f"Active backend: {backend_info['active_backend']}")
+
+# View performance statistics
+stats = screen_capture.get_performance_stats()
+print(f"Windows optimized: {stats['windows_opt_usage_percent']}%")
+print(f"Average capture time: {stats['avg_capture_time_ms']}ms")
+```
+
+### 🎯 Use Cases
+
+**When Windows Optimization Helps Most:**
+- 🎮 **Gaming**: Capture DirectX/Vulkan content at high FPS
+- 🎬 **Video Production**: Low-latency screen recording
+- 💻 **Remote Desktop**: Minimal CPU overhead for streaming
+- 🔒 **Secure Applications**: WGC provides authorized, secure capture
+- ⚡ **High-Performance Scenarios**: Real-time analysis, monitoring
+
+**When MSS is Sufficient:**
+- 📸 Occasional screenshots
+- 🖥️ Non-Windows platforms (Linux, macOS)
+- 📊 Low-frequency monitoring
+- 🔧 Simple automation tasks
+
+---
+
 ## [2.4.0] - 2025-11-18 **PERFORMANCE RELEASE**
 
 ### 🚀 Performance & Memory Optimizations

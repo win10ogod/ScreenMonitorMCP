@@ -2,11 +2,12 @@
 """
 Screen Capture Module for ScreenMonitorMCP v2
 
-This module provides optimized screen capture functionality using the mss library.
-It supports multi-monitor setups, various image formats, and performance optimizations.
+This module provides optimized screen capture functionality with platform-specific optimizations.
+- Windows: Optional WGC/DXGI GPU-accelerated capture
+- Cross-platform: MSS library fallback
 
 Author: ScreenMonitorMCP Team
-Version: 2.4.0
+Version: 2.5.0
 License: MIT
 """
 
@@ -14,6 +15,7 @@ import asyncio
 import base64
 import io
 import logging
+import platform
 import time
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
@@ -24,9 +26,18 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+# Optional Windows optimization
+try:
+    from .windows_capture import get_windows_capture, is_windows_optimization_available
+    WINDOWS_OPT_AVAILABLE = platform.system() == "Windows"
+except ImportError:
+    WINDOWS_OPT_AVAILABLE = False
+    get_windows_capture = None
+    is_windows_optimization_available = lambda: False
+
 
 class ScreenCapture:
-    """Optimized screen capture functionality using mss library."""
+    """Optimized screen capture functionality using mss library with optional Windows optimization."""
 
     def __init__(self):
         """Initialize the screen capture system with performance optimizations."""
@@ -36,8 +47,25 @@ class ScreenCapture:
         self._performance_stats = {
             "total_captures": 0,
             "cache_hits": 0,
-            "avg_capture_time_ms": 0.0
+            "avg_capture_time_ms": 0.0,
+            "windows_opt_captures": 0,
+            "mss_captures": 0
         }
+
+        # Initialize Windows optimization if available
+        self._windows_capture = None
+        if WINDOWS_OPT_AVAILABLE:
+            try:
+                self._windows_capture = get_windows_capture()
+                if self._windows_capture and self._windows_capture.active_backend:
+                    self.logger.info(
+                        f"Windows optimization enabled: {self._windows_capture.active_backend}"
+                    )
+                else:
+                    self.logger.info("Windows optimization available but no backends active")
+            except Exception as e:
+                self.logger.warning(f"Windows optimization initialization failed: {e}")
+                self._windows_capture = None
     
     async def capture_screen(self, monitor: int = 0, region: Optional[Dict[str, int]] = None,
                            format: str = "png", use_cache: bool = True) -> Dict[str, Any]:
@@ -132,11 +160,63 @@ class ScreenCapture:
         if self._performance_stats["total_captures"] > 0:
             cache_hit_rate = (self._performance_stats["cache_hits"] /
                             self._performance_stats["total_captures"]) * 100
+
+        # Calculate backend usage percentages
+        windows_opt_percent = 0.0
+        mss_percent = 0.0
+        total_backend_captures = (self._performance_stats["windows_opt_captures"] +
+                                 self._performance_stats["mss_captures"])
+        if total_backend_captures > 0:
+            windows_opt_percent = (self._performance_stats["windows_opt_captures"] /
+                                  total_backend_captures) * 100
+            mss_percent = (self._performance_stats["mss_captures"] /
+                          total_backend_captures) * 100
+
         return {
             **self._performance_stats,
             "cache_hit_rate_percent": round(cache_hit_rate, 2),
-            "cache_size": len(self._capture_cache)
+            "cache_size": len(self._capture_cache),
+            "windows_opt_usage_percent": round(windows_opt_percent, 2),
+            "mss_usage_percent": round(mss_percent, 2)
         }
+
+    def get_backend_info(self) -> Dict[str, Any]:
+        """Get information about the active capture backend and available optimizations."""
+        backend_info = {
+            "platform": platform.system(),
+            "active_backend": "mss",
+            "windows_optimization_available": WINDOWS_OPT_AVAILABLE,
+            "windows_optimization_active": False,
+            "backend_details": None,
+            "recommendations": {}
+        }
+
+        if self._windows_capture:
+            windows_info = self._windows_capture.get_backend_info()
+            backend_info.update({
+                "windows_optimization_active": bool(self._windows_capture.active_backend),
+                "active_backend": self._windows_capture.active_backend or "mss",
+                "backend_details": windows_info,
+                "recommendations": windows_info.get("recommendations", {})
+            })
+        elif WINDOWS_OPT_AVAILABLE:
+            backend_info["recommendations"] = {
+                "message": "Windows optimization available but not initialized",
+                "suggestion": "Restart the application to enable Windows optimization"
+            }
+        elif platform.system() == "Windows":
+            backend_info["recommendations"] = {
+                "message": "Windows optimization not available - using MSS fallback",
+                "wgc_install": "pip install pythonnet (for Windows Graphics Capture)",
+                "dxgi_install": "pip install comtypes pywin32 (for DXGI Desktop Duplication)",
+                "benefits": "2-10x faster capture, GPU-accelerated, better for gaming/video"
+            }
+        else:
+            backend_info["recommendations"] = {
+                "message": "Using MSS (cross-platform capture) - optimal for this platform"
+            }
+
+        return backend_info
     
     async def capture_screen_raw(self, monitor: int = 0, region: Optional[Dict[str, int]] = None, 
                                format: str = "png") -> bytes:
@@ -161,14 +241,38 @@ class ScreenCapture:
             self.logger.error(f"Screen capture failed: {e}")
             raise
 
-    def _capture_screen_sync(self, monitor: int, region: Optional[Dict[str, int]], 
+    def _capture_screen_sync(self, monitor: int, region: Optional[Dict[str, int]],
                            format: str) -> bytes:
-        """Synchronous screen capture implementation."""
+        """Synchronous screen capture implementation with Windows optimization."""
+
+        # Try Windows optimization first (if available and no region specified)
+        # Region-based capture not yet supported for Windows optimization
+        if self._windows_capture and not region:
+            try:
+                # Attempt optimized Windows capture
+                img = asyncio.run(self._windows_capture.capture_optimized(monitor))
+                if img:
+                    self._performance_stats["windows_opt_captures"] += 1
+
+                    # Convert PIL Image to bytes with optimized compression
+                    img_bytes = io.BytesIO()
+                    if format.lower() == "jpeg":
+                        img.save(img_bytes, format="JPEG", quality=75, optimize=True)
+                    else:
+                        img.save(img_bytes, format="PNG", compress_level=6, optimize=True)
+
+                    return img_bytes.getvalue()
+            except Exception as e:
+                self.logger.debug(f"Windows optimization failed, falling back to MSS: {e}")
+
+        # Fallback to MSS (cross-platform)
+        self._performance_stats["mss_captures"] += 1
+
         with mss.mss() as sct:
             # Get monitor info
             if monitor >= len(sct.monitors):
                 raise ValueError(f"Monitor {monitor} not found. Available: {len(sct.monitors) - 1}")
-            
+
             # Use specific region or full monitor
             if region:
                 capture_area = {
@@ -179,10 +283,10 @@ class ScreenCapture:
                 }
             else:
                 capture_area = sct.monitors[monitor]
-            
+
             # Capture screenshot
             screenshot = sct.grab(capture_area)
-            
+
             # Convert to PIL Image - handle different pixel formats safely
             try:
                 img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
@@ -190,7 +294,7 @@ class ScreenCapture:
                 # Fallback to RGBA format if BGRX fails
                 img = Image.frombytes("RGBA", screenshot.size, screenshot.bgra, "raw", "BGRA")
                 img = img.convert("RGB")
-            
+
             # Save to bytes with optimized compression
             img_bytes = io.BytesIO()
             if format.lower() == "jpeg":

@@ -593,18 +593,18 @@ async def get_database_pool_stats() -> str:
 @mcp.tool()
 async def database_pool_health_check() -> str:
     """Perform database pool health check
-    
+
     Returns:
         Database pool health status
     """
     try:
         from .memory_system import memory_system
-        
+
         if not memory_system._db_pool:
             return "Database pool not initialized"
-        
+
         health = await memory_system._db_pool.health_check()
-        
+
         if health["healthy"]:
             response_lines = [
                 "Database Pool Health: HEALTHY ✓",
@@ -619,10 +619,75 @@ async def database_pool_health_check() -> str:
                 "Database Pool Health: UNHEALTHY ✗",
                 f"- Error: {health.get('error', 'Unknown error')}"
             ]
-        
+
         return "\n".join(response_lines)
     except Exception as e:
         logger.error(f"Failed to perform database health check: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+def get_capture_backend_info() -> str:
+    """Get screen capture backend information and optimization status
+
+    Returns detailed information about:
+    - Active capture backend (MSS, DXGI, WGC)
+    - Windows optimization availability and status
+    - Platform-specific recommendations
+    - Performance statistics for different backends
+
+    This is useful for understanding:
+    - Whether Windows GPU-accelerated capture is being used
+    - Installation requirements for optimizations
+    - Expected performance improvements
+
+    Returns:
+        Capture backend information and recommendations
+    """
+    try:
+        backend_info = screen_capture.get_backend_info()
+        perf_stats = screen_capture.get_performance_stats()
+
+        response_lines = [
+            "Screen Capture Backend Information:",
+            f"- Platform: {backend_info['platform']}",
+            f"- Active Backend: {backend_info['active_backend']}",
+            f"- Windows Optimization Available: {backend_info['windows_optimization_available']}",
+            f"- Windows Optimization Active: {backend_info['windows_optimization_active']}",
+            "",
+            "Performance Statistics:",
+            f"- Total Captures: {perf_stats['total_captures']}",
+            f"- Cache Hit Rate: {perf_stats['cache_hit_rate_percent']}%",
+            f"- Average Capture Time: {perf_stats['avg_capture_time_ms']:.2f}ms",
+            f"- Windows Optimized Captures: {perf_stats['windows_opt_captures']} ({perf_stats['windows_opt_usage_percent']}%)",
+            f"- MSS Captures: {perf_stats['mss_captures']} ({perf_stats['mss_usage_percent']}%)",
+        ]
+
+        # Add backend details if available
+        if backend_info.get('backend_details'):
+            details = backend_info['backend_details']
+            response_lines.append("")
+            response_lines.append("Backend Details:")
+            response_lines.append(f"- Available Backends: {', '.join(details.get('available_backends', []))}")
+            if details.get('backend_details'):
+                for name, info in details['backend_details'].items():
+                    response_lines.append(f"  - {name}: {info.get('backend', 'N/A')} (initialized: {info.get('initialized', False)})")
+
+        # Add recommendations
+        recommendations = backend_info.get('recommendations', {})
+        if recommendations:
+            response_lines.append("")
+            response_lines.append("Recommendations:")
+            response_lines.append(f"- {recommendations.get('message', 'No recommendations')}")
+            if 'wgc_install' in recommendations:
+                response_lines.append(f"- For WGC: {recommendations['wgc_install']}")
+            if 'dxgi_install' in recommendations:
+                response_lines.append(f"- For DXGI: {recommendations['dxgi_install']}")
+            if 'benefits' in recommendations:
+                response_lines.append(f"- Benefits: {recommendations['benefits']}")
+
+        return "\n".join(response_lines)
+    except Exception as e:
+        logger.error(f"Failed to get capture backend info: {e}")
         return f"Error: {str(e)}"
 
 # Additional deprecated AI tools removed (v2.1+)
