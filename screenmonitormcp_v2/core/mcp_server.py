@@ -76,11 +76,14 @@ def _add_to_cache(image_data: str, mime_type: str, metadata: dict) -> str:
     return resource_uri
 
 @mcp.resource("screen://capture/{capture_id}")
-async def get_screen_capture(capture_id: str) -> str:
+async def get_screen_capture(capture_id: str) -> bytes:
     """Get a captured screen image by resource URI.
 
     This resource provides the actual image data for captures.
     Use capture_screen tool to create new captures.
+
+    Returns:
+        bytes: Raw image data (FastMCP handles base64 encoding automatically)
     """
     # Reconstruct full URI from capture_id
     uri = f"screen://capture/{capture_id}"
@@ -88,11 +91,12 @@ async def get_screen_capture(capture_id: str) -> str:
     if uri not in _image_cache:
         raise ValueError(f"Capture not found: {uri}")
 
-    image_data, mime_type, metadata = _image_cache[uri]
+    image_data_base64, mime_type, metadata = _image_cache[uri]
 
-    # Return image data with proper MIME type
-    # MCP will handle base64 encoding automatically
-    return image_data
+    # Decode base64 to bytes - FastMCP will handle base64 encoding for MCP protocol
+    image_bytes = base64.b64decode(image_data_base64)
+
+    return image_bytes
 
 @mcp.tool()
 async def capture_screen(
