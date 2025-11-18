@@ -49,6 +49,100 @@ except ImportError:
 # Initialize FastMCP server
 mcp = FastMCP("screenmonitormcp-v2")
 
+# Add prompts to guide the MCP client on how to use this server
+@mcp.prompt()
+def capture_screenshot_prompt() -> str:
+    """How to capture and view screenshots
+
+    This prompt explains the correct way to capture and view screenshots
+    using this MCP server.
+    """
+    return """To capture and view a screenshot:
+
+1. Call the capture_screen tool:
+   - This returns a resource_uri like "screen://capture/abc123"
+
+2. The image will be automatically displayed to you
+   - MCP clients (like Claude Desktop) automatically fetch and display resources
+   - You don't need to call any additional tools
+   - The image will appear in the conversation
+
+3. You can then analyze the image naturally
+   - Describe what you see
+   - Answer questions about the image
+   - Provide feedback or suggestions
+
+Example usage:
+- "Capture my screen and tell me what you see"
+- "Take a screenshot and check if there are any errors"
+- "Capture the screen and analyze the UI layout"
+
+DO NOT try to read the resource URI with read_file or other file tools.
+The MCP protocol handles resource fetching automatically."""
+
+@mcp.prompt()
+def streaming_guide_prompt() -> str:
+    """How to use streaming in MCP mode
+
+    This prompt explains how to use streaming features.
+    """
+    return """To use screen streaming in MCP mode:
+
+1. Create a stream with create_stream:
+   - Returns a stream_id
+   - Specify fps (frames per second), quality, and format
+   - Example: create_stream(monitor=0, fps=10, quality=75)
+
+2. Capture frames from the stream with capture_stream_frame:
+   - Takes the stream_id
+   - Returns a resource URI for the current frame
+   - Image automatically displayed by MCP client
+   - Example: capture_stream_frame(stream_id="abc123...")
+
+3. Monitor stream status:
+   - Use list_streams to see all active streams
+   - Use get_stream_info for detailed stream information
+
+4. Stop the stream when done:
+   - Use stop_stream(stream_id) to end streaming
+
+Streaming is useful for:
+- Monitoring screen changes over time
+- Periodic screenshots at specified FPS
+- Analyzing how screens change
+
+Example workflow:
+1. "Create a stream at 5 fps"
+2. "Capture a frame from the stream"
+3. "Capture another frame" (repeatable)
+4. "Stop the stream"""
+
+@mcp.prompt()
+def system_info_prompt() -> str:
+    """How to get system information
+
+    This prompt explains how to check system status and performance.
+    """
+    return """To check system status and performance:
+
+1. Use get_system_status to see overall system health:
+   - Screen capture availability
+   - Performance monitor status
+   - Stream manager status
+
+2. Use get_performance_metrics for detailed metrics:
+   - CPU usage
+   - Memory usage
+   - Capture performance
+
+3. Use get_capture_backend_info to see screenshot backend details:
+   - Active backend (MSS, DXGI, or WGC)
+   - Windows optimization status
+   - Performance statistics
+   - Expected improvements
+
+4. Use get_memory_statistics for memory system stats"""
+
 # Initialize components
 screen_capture = ScreenCapture()
 
@@ -249,10 +343,10 @@ async def get_stream_info(stream_id: str) -> str:
 @mcp.tool()
 async def stop_stream(stream_id: str) -> str:
     """Stop a specific streaming session
-    
+
     Args:
         stream_id: Stream ID to stop
-    
+
     Returns:
         Success or error message
     """
@@ -261,6 +355,68 @@ async def stop_stream(stream_id: str) -> str:
         return f"Stream stopped: {result}"
     except Exception as e:
         logger.error(f"Failed to stop stream: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def capture_stream_frame(stream_id: str) -> str:
+    """Capture current frame from an active stream and return resource URI
+
+    This allows using streams in MCP mode by capturing individual frames
+    as resources. The client will automatically fetch and display the image.
+
+    Args:
+        stream_id: Stream ID to capture from
+
+    Returns:
+        JSON with resource URI and metadata
+    """
+    try:
+        # Get stream info to check if it exists
+        stream_info = await stream_manager.get_stream_info(stream_id)
+        if not stream_info:
+            return f"Error: Stream {stream_id} not found"
+
+        # Get monitor from stream config
+        monitor = stream_info.get("monitor", 0)
+
+        # Capture current frame using screen_capture
+        capture_result = await screen_capture.capture_screen(monitor)
+        if not capture_result.get("success"):
+            return f"Error: Failed to capture frame - {capture_result.get('message', 'Unknown error')}"
+
+        # Prepare metadata
+        metadata = {
+            "timestamp": datetime.now().isoformat(),
+            "stream_id": stream_id,
+            "monitor": monitor,
+            "width": capture_result.get("width"),
+            "height": capture_result.get("height"),
+            "format": stream_info.get("format", "jpeg"),
+            "quality": stream_info.get("quality", 75)
+        }
+
+        # Determine MIME type
+        mime_type = f"image/{stream_info.get('format', 'jpeg')}"
+
+        # Add to cache and get resource URI
+        resource_uri = _add_to_cache(
+            capture_result["image_data"],
+            mime_type,
+            metadata
+        )
+
+        import json
+        result = {
+            "success": True,
+            "resource_uri": resource_uri,
+            "mime_type": mime_type,
+            "metadata": metadata,
+            "note": "Use the resource_uri to fetch the actual image data via MCP resources"
+        }
+
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Failed to capture stream frame: {e}")
         return f"Error: {str(e)}"
 
 # Memory System Tools

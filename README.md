@@ -155,14 +155,25 @@ Note: This approach is deprecated. Use the recommended client-side analysis inst
   - Cache keeps last 10 captures for resource requests
   - **This is the ONLY way to capture screens** - simple and efficient
 
-### Streaming & Monitoring
+### System Monitoring
 
-- `create_stream` - Start live screen streaming
+- `get_performance_metrics` - System health and performance metrics
+- `get_system_status` - Overall system status
+- `get_capture_backend_info` - Screenshot backend status (MSS/DXGI/WGC)
+
+### Streaming
+
+- `create_stream` - Create a new streaming session
+- `capture_stream_frame` - Capture current frame from stream (returns resource URI)
 - `list_streams` - List active streams
 - `stop_stream` - Stop a stream
 - `get_stream_info` - Get stream information
-- `get_performance_metrics` - System health monitoring
-- `get_system_status` - Overall system status
+
+**MCP Mode Usage:**
+1. Create stream with `create_stream(monitor=0, fps=10, quality=75)`
+2. Capture frames with `capture_stream_frame(stream_id)`
+3. Each frame returns a resource URI for automatic display
+4. Stop with `stop_stream(stream_id)` when done
 
 ### Memory & Database
 
