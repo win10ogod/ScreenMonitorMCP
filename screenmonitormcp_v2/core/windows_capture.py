@@ -63,11 +63,11 @@ class DXGICaptureBackend(WindowsCaptureBackend):
     """DXGI Desktop Duplication backend (Windows 8+).
 
     High-performance GPU-based capture using DirectX Graphics Infrastructure.
-    Uses dxcam library for production-ready DXGI Desktop Duplication API access.
+    Uses dxcam-cpp library (actively maintained) for production-ready DXGI Desktop Duplication API access.
 
     Performance: ~1-5ms per capture (240+ FPS capable)
     Pros: Excellent performance, captures hardware-accelerated content, multi-monitor support
-    Cons: Windows 8+ only, requires dxcam library
+    Cons: Windows 8+ only, requires dxcam-cpp library
     """
 
     def __init__(self):
@@ -86,6 +86,7 @@ class DXGICaptureBackend(WindowsCaptureBackend):
 
         try:
             # Check for dxcam library (high-performance DXGI wrapper)
+            # Note: We use dxcam-cpp (actively maintained fork)
             import dxcam
 
             # Get device and output information
@@ -93,17 +94,17 @@ class DXGICaptureBackend(WindowsCaptureBackend):
             self._output_info = dxcam.output_info()
 
             self._dxgi_available = True
-            logger.info(f"DXGI Desktop Duplication available (via dxcam)")
+            logger.info(f"DXGI Desktop Duplication available (via dxcam-cpp)")
             logger.info(f"Available GPUs: {len(self._device_info) if self._device_info else 0}")
             logger.info(f"Available outputs: {len(self._output_info) if self._output_info else 0}")
         except ImportError:
-            logger.info("DXGI unavailable: Install with 'pip install dxcam'")
-            logger.info("dxcam provides ultra-fast DXGI screen capture (1-5ms, 240+ FPS)")
+            logger.info("DXGI unavailable: Install with 'pip install dxcam-cpp'")
+            logger.info("dxcam-cpp provides ultra-fast DXGI screen capture (1-5ms, 240+ FPS)")
         except Exception as e:
             logger.warning(f"DXGI availability check failed: {e}")
 
     def initialize(self) -> bool:
-        """Initialize DXGI capture using dxcam.
+        """Initialize DXGI capture using dxcam-cpp.
 
         Creates camera instances for available monitors with intelligent defaults.
         """
