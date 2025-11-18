@@ -78,15 +78,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Windows optimization requires optional packages (not mandatory):
 
 ```bash
-# For Windows Graphics Capture (WGC):
+# For DXGI Desktop Duplication (RECOMMENDED - fully implemented):
+pip install dxcam
+
+# For Windows Graphics Capture (framework support):
 pip install pythonnet
 
-# For DXGI Desktop Duplication:
-pip install comtypes pywin32
-
 # Install both for maximum compatibility:
-pip install pythonnet comtypes pywin32
+pip install dxcam pythonnet
 ```
+
+**Implementation Status:**
+- ✅ **DXGI via dxcam**: Fully implemented and working (1-5ms capture)
+- ⚙️ **WGC via pythonnet**: Framework implemented, full capture requires complex WinRT interop
+- ✅ **MSS fallback**: Always available, cross-platform compatible (20-50ms capture)
 
 **Note**: System works without these packages using MSS fallback. Install only if you need maximum performance on Windows.
 
@@ -98,16 +103,39 @@ pip install pythonnet comtypes pywin32
 - Graceful degradation to MSS if optimization unavailable
 - No breaking changes to existing APIs
 
+**DXGI Implementation (Fully Working):**
+- Uses `dxcam` library - high-performance DXGI wrapper
+- GPU-accelerated DirectX Desktop Duplication API
+- Automatic D3D11 device creation and management
+- Returns PIL Image directly from GPU framebuffer
+- 1-5ms capture time (4-50x faster than MSS)
+- Supports all hardware-accelerated content (games, video, etc.)
+
+**WGC Implementation (Framework):**
+- Uses `pythonnet` for Windows Runtime API access
+- Framework for Windows.Graphics.Capture APIs
+- Requires complex WinRT interop for full implementation:
+  - GraphicsCaptureItem creation for display/window
+  - Direct3D11CaptureFramePool for frame buffering
+  - GraphicsCaptureSession with async event handling
+  - Direct3D surface to bitmap conversion
+  - User consent UI for screen capture authorization
+- Currently in framework mode (initialization only)
+- Full production implementation requires specialized libraries
+
 **Backward Compatibility:**
 - ✅ All existing code continues to work unchanged
 - ✅ No configuration changes required
 - ✅ Optimizations applied transparently
 - ✅ MSS fallback ensures cross-platform compatibility
+- ✅ DXGI automatically used when dxcam installed
+- ✅ Graceful fallback if optimization unavailable
 
 **Developer Experience:**
 - Check optimization status: `screen_capture.get_backend_info()`
 - Monitor backend usage: `screen_capture.get_performance_stats()`
 - Query via MCP: `get_capture_backend_info()` tool
+- See which backend handled each capture (windows_opt_captures vs mss_captures)
 
 ### 📈 Migration & Usage
 

@@ -63,17 +63,18 @@ class DXGICaptureBackend(WindowsCaptureBackend):
     """DXGI Desktop Duplication backend (Windows 8+).
 
     High-performance GPU-based capture using DirectX Graphics Infrastructure.
-    Requires: pywin32, comtypes (optional dependencies)
+    Uses dxcam library for simplified DXGI access (optional dependency).
 
     Performance: ~1-5ms per capture
     Pros: Excellent performance, captures hardware-accelerated content
-    Cons: Complex setup, Windows 8+ only
+    Cons: Windows 8+ only, requires dxcam library
     """
 
     def __init__(self):
         super().__init__()
         self.backend_name = "DXGI Desktop Duplication"
         self._dxgi_available = False
+        self._camera = None
         self._check_availability()
 
     def _check_availability(self) -> None:
@@ -82,58 +83,104 @@ class DXGICaptureBackend(WindowsCaptureBackend):
             return
 
         try:
-            # Check for required libraries
-            import comtypes
+            # Check for dxcam library (high-performance DXGI wrapper)
+            import dxcam
             self._dxgi_available = True
-            logger.info("DXGI Desktop Duplication available")
+            logger.info("DXGI Desktop Duplication available (via dxcam)")
         except ImportError:
-            logger.info("DXGI unavailable: Install with 'pip install comtypes pywin32'")
+            logger.info("DXGI unavailable: Install with 'pip install dxcam'")
+            logger.info("dxcam provides ultra-fast DXGI screen capture (1-5ms)")
 
     def initialize(self) -> bool:
-        """Initialize DXGI capture."""
+        """Initialize DXGI capture using dxcam."""
         if not self._dxgi_available:
             return False
 
         try:
-            # TODO: Initialize DXGI Desktop Duplication
-            # This requires complex DirectX setup with comtypes
-            # Implementation deferred to avoid dependency bloat
-            logger.info("DXGI initialization would happen here")
-            self.is_initialized = False
-            return False
+            import dxcam
+
+            # Create camera instance for screen capture
+            # dxcam automatically handles all DirectX setup
+            self._camera = dxcam.create(output_idx=0, output_color="RGB")
+
+            if self._camera is None:
+                logger.error("Failed to create dxcam camera instance")
+                return False
+
+            logger.info("DXGI initialized successfully via dxcam")
+            self.is_initialized = True
+            return True
+
         except Exception as e:
             logger.error(f"DXGI initialization failed: {e}")
+            logger.info("DXGI requires DirectX-compatible GPU - falling back to MSS")
             return False
 
     def capture(self, monitor: int = 0) -> Optional[Image.Image]:
-        """Capture using DXGI."""
-        if not self.is_initialized:
+        """Capture using DXGI via dxcam.
+
+        Args:
+            monitor: Monitor index (0 for primary display)
+
+        Returns:
+            PIL Image or None if capture fails
+        """
+        if not self.is_initialized or self._camera is None:
             return None
 
         try:
-            # TODO: Implement DXGI capture
-            # This would use ID3D11Device and IDXGIOutputDuplication
-            return None
+            # Capture frame using dxcam (extremely fast, 1-5ms)
+            frame = self._camera.grab()
+
+            if frame is None:
+                logger.debug("DXGI capture returned None (display may be off)")
+                return None
+
+            # Convert numpy array to PIL Image
+            # dxcam returns RGB numpy array
+            import numpy as np
+            if isinstance(frame, np.ndarray):
+                image = Image.fromarray(frame, mode='RGB')
+                return image
+            else:
+                logger.warning(f"Unexpected frame type from dxcam: {type(frame)}")
+                return None
+
         except Exception as e:
             logger.error(f"DXGI capture failed: {e}")
             return None
+
+    def cleanup(self) -> None:
+        """Cleanup DXGI resources."""
+        if self._camera:
+            try:
+                # Release dxcam camera
+                self._camera.release()
+                self._camera = None
+            except Exception as e:
+                logger.error(f"Failed to release dxcam camera: {e}")
+
+        self.is_initialized = False
 
 
 class WGCCaptureBackend(WindowsCaptureBackend):
     """Windows Graphics Capture backend (Windows 10 1803+).
 
     Modern, secure GPU-based capture with user authorization.
-    Requires: pythonnet (optional dependency)
+    Uses pythonnet to access Windows Runtime APIs (optional dependency).
 
     Performance: ~1-5ms per capture
-    Pros: Secure (user must authorize), easy API, excellent window capture
-    Cons: Requires user interaction, Windows 10 1803+ only
+    Pros: Secure (user must authorize), modern API, excellent for specific windows
+    Cons: Requires user interaction for authorization, Windows 10 1803+ only
     """
 
     def __init__(self):
         super().__init__()
         self.backend_name = "Windows Graphics Capture"
         self._wgc_available = False
+        self._capture_session = None
+        self._frame_pool = None
+        self._latest_frame = None
         self._check_availability()
 
     def _check_availability(self) -> None:
@@ -149,37 +196,114 @@ class WGCCaptureBackend(WindowsCaptureBackend):
                 import clr
                 self._wgc_available = True
                 logger.info("Windows Graphics Capture available")
-        except (ImportError, AttributeError):
+            else:
+                logger.info(f"WGC unavailable: Windows build {sys.getwindowsversion().build} < 17134 (need 1803+)")
+        except (ImportError, AttributeError) as e:
             logger.info("WGC unavailable: Install with 'pip install pythonnet'")
+            logger.debug(f"WGC check error: {e}")
 
     def initialize(self) -> bool:
-        """Initialize WGC capture."""
+        """Initialize WGC capture using Windows Runtime APIs."""
         if not self._wgc_available:
             return False
 
         try:
-            # TODO: Initialize Windows Graphics Capture
-            # This requires Windows.Graphics.Capture APIs via pythonnet
-            # Implementation deferred to avoid dependency bloat
-            logger.info("WGC initialization would happen here")
-            self.is_initialized = False
+            import clr
+            import System
+            from System import Array, Byte, IntPtr
+            from System.Runtime.InteropServices import Marshal
+
+            # Load Windows Runtime assemblies
+            clr.AddReference("System.Runtime.WindowsRuntime")
+            from System.Runtime.WindowsRuntime import WindowsRuntimeSystemExtensions
+
+            # Import Windows.Graphics.Capture namespace
+            import Windows.Graphics.Capture as WGC
+            import Windows.Graphics.DirectX as DirectX
+            import Windows.Graphics.DirectX.Direct3D11 as D3D11
+
+            # Note: Full WGC implementation requires:
+            # 1. Creating GraphicsCaptureItem for the display/window
+            # 2. Creating Direct3D11CaptureFramePool
+            # 3. Creating GraphicsCaptureSession
+            # 4. Handling frame arrival events
+            # 5. Converting Direct3D surface to bitmap
+
+            # This is complex because it requires:
+            # - COM interop for Direct3D device
+            # - Async event handling
+            # - User consent for screen capture
+            # - Frame buffer management
+
+            logger.info("WGC API loaded successfully")
+
+            # For a production implementation, consider using dedicated libraries
+            # that handle the complexity, such as:
+            # - windows-capture (https://pypi.org/project/windows-capture/)
+            # - Or implement full WinRT interop as shown below
+
+            # Simplified approach: Check if we can access the APIs
+            # Full implementation would require creating capture session
+
+            logger.info("WGC initialized (framework mode - full capture requires user consent)")
+            self.is_initialized = False  # Set to False until full implementation
             return False
+
         except Exception as e:
             logger.error(f"WGC initialization failed: {e}")
+            logger.info("WGC requires pythonnet and Windows 10 1803+ - falling back to MSS")
             return False
 
     def capture(self, monitor: int = 0) -> Optional[Image.Image]:
-        """Capture using WGC."""
+        """Capture using WGC.
+
+        Full implementation requires:
+        1. GraphicsCaptureItem for display/window
+        2. Direct3D11CaptureFramePool for frame buffering
+        3. GraphicsCaptureSession to start capture
+        4. Event handling for frame arrival
+        5. Converting Direct3D11 surface to PIL Image
+
+        For production use, recommend specialized libraries like windows-capture.
+        """
         if not self.is_initialized:
             return None
 
         try:
-            # TODO: Implement WGC capture
-            # This would use Windows.Graphics.Capture.GraphicsCaptureSession
+            # Full WGC capture implementation would:
+            # 1. Wait for next frame from frame pool
+            # 2. Get Direct3D11CaptureFrame
+            # 3. Access ContentSize and Surface
+            # 4. Copy surface data to system memory
+            # 5. Convert to PIL Image
+            # 6. Dispose frame
+
+            logger.debug("WGC capture called (framework mode)")
             return None
+
         except Exception as e:
             logger.error(f"WGC capture failed: {e}")
             return None
+
+    def cleanup(self) -> None:
+        """Cleanup WGC resources."""
+        if self._capture_session:
+            try:
+                # Stop capture session
+                self._capture_session.Close()
+                self._capture_session = None
+            except:
+                pass
+
+        if self._frame_pool:
+            try:
+                # Close frame pool
+                self._frame_pool.Close()
+                self._frame_pool = None
+            except:
+                pass
+
+        self.is_initialized = False
 
 
 class OptimizedWindowsCapture:
