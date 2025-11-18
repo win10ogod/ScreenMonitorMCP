@@ -1,6 +1,6 @@
 # ScreenMonitorMCP v2
 
-[![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)](https://github.com/inkbytefo/ScreenMonitorMCP/releases/tag/v2.5.0)
+[![Version](https://img.shields.io/badge/version-2.6.0-blue.svg)](https://github.com/inkbytefo/ScreenMonitorMCP/releases/tag/v2.6.0)
 [![PyPI](https://img.shields.io/pypi/v/screenmonitormcp-v2.svg)](https://pypi.org/project/screenmonitormcp-v2/)
 [![Python](https://img.shields.io/pypi/pyversions/screenmonitormcp-v2.svg)](https://pypi.org/project/screenmonitormcp-v2/)
 [![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/a2dbda0f-f46d-40e1-9c13-0b47eff9df3a)
@@ -101,7 +101,7 @@ pip install -e .
 
 ### Configuration
 
-**Recommended (Simpler & More Secure):**
+**Option 1: MCP via stdio (Recommended - Claude Desktop)**
 
 Add to your Claude Desktop config - No API keys needed!
 
@@ -117,9 +117,45 @@ Add to your Claude Desktop config - No API keys needed!
 ```
 
 Restart Claude Desktop and start using:
-- Use `capture_screen_image` tool to capture screenshots
+- Use `capture_screen` tool to capture screenshots
 - Claude will analyze the images with its own vision model
 - No configuration, no API keys, no complexity!
+- **Streaming**: Use `create_stream` + `capture_stream_frame` for manual frame capture
+
+**Option 2: MCP over HTTP/SSE (Remote Connections)**
+
+For remote connections or web-based MCP clients:
+
+```bash
+# Install with HTTP dependencies
+pip install screenmonitormcp-v2[http]
+
+# Start HTTP server
+python -m screenmonitormcp_v2
+
+# Server runs at http://localhost:8000
+# MCP endpoints:
+#   - SSE: http://localhost:8000/mcp/sse
+#   - Messages: http://localhost:8000/mcp/messages
+```
+
+Configure your MCP client to connect via SSE:
+```json
+{
+  "mcpServers": {
+    "screenmonitormcp-v2": {
+      "transport": "sse",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+Benefits of SSE mode:
+- Remote connections over network
+- Auto-push streaming (use `start_auto_push_stream`)
+- Multiple clients can connect simultaneously
+- WebSocket and REST API also available
 
 **Alternative (Legacy - Requires External AI API):**
 
@@ -165,15 +201,25 @@ Note: This approach is deprecated. Use the recommended client-side analysis inst
 
 - `create_stream` - Create a new streaming session
 - `capture_stream_frame` - Capture current frame from stream (returns resource URI)
+- `start_auto_push_stream` - Start auto-push streaming (SSE mode only)
+- `stop_auto_push_stream_tool` - Stop auto-push streaming (SSE mode only)
 - `list_streams` - List active streams
 - `stop_stream` - Stop a stream
 - `get_stream_info` - Get stream information
 
-**MCP Mode Usage:**
+**Stdio Mode (Claude Desktop) Usage:**
 1. Create stream with `create_stream(monitor=0, fps=10, quality=75)`
-2. Capture frames with `capture_stream_frame(stream_id)`
+2. Manually capture frames with `capture_stream_frame(stream_id)`
 3. Each frame returns a resource URI for automatic display
-4. Stop with `stop_stream(stream_id)` when done
+4. Repeat step 2 as needed for more frames
+5. Stop with `stop_stream(stream_id)` when done
+
+**SSE Mode (HTTP/Remote) Usage:**
+1. Create stream with `create_stream(monitor=0, fps=10, quality=75)`
+2. Enable auto-push with `start_auto_push_stream(stream_id, fps=5)`
+3. Frames are automatically pushed to client at specified FPS
+4. Stop auto-push with `stop_auto_push_stream_tool(stream_id)`
+5. Stop stream with `stop_stream(stream_id)` when done
 
 ### Memory & Database
 

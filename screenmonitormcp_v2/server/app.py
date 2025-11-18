@@ -15,6 +15,14 @@ from ..models.responses import HealthCheckResponse
 from ..server.config import config
 from .routes import api_router, ws_router
 
+# Import MCP over SSE router (lazy import to avoid dependency in MCP-only mode)
+try:
+    from ..core.mcp_sse_server import sse_router
+    SSE_AVAILABLE = True
+except ImportError:
+    SSE_AVAILABLE = False
+    sse_router = None
+
 logger = structlog.get_logger()
 
 # Create app factory for testing
@@ -98,20 +106,35 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v2")
 app.include_router(ws_router, prefix="/ws")
 
+# Include MCP over SSE router if available
+if SSE_AVAILABLE and sse_router:
+    app.include_router(sse_router, prefix="/mcp")
+    logger.info("MCP over SSE enabled at /mcp/sse")
+
 
 @app.get("/")
 async def root():
     """Root endpoint."""
+    endpoints = {
+        "api": "/api/v2",
+        "websocket": "/ws",
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+    # Add MCP endpoints if available
+    if SSE_AVAILABLE:
+        endpoints["mcp"] = {
+            "sse": "/mcp/sse",
+            "messages": "/mcp/messages",
+            "description": "MCP over HTTP (Server-Sent Events)"
+        }
+
     return {
         "name": "ScreenMonitorMCP v2",
-        "version": "2.0.0",
+        "version": "2.5.0",
         "description": "Streamable HTTP/SSE MCP Server",
-        "endpoints": {
-            "api": "/api/v2",
-            "websocket": "/ws",
-            "health": "/health",
-            "docs": "/docs",
-        },
+        "endpoints": endpoints,
     }
 
 

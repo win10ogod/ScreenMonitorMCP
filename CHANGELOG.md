@@ -5,6 +5,90 @@ All notable changes to ScreenMonitorMCP v2 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2025-11-18 **MCP TRANSPORT MODES RELEASE**
+
+### 🚀 New Features
+
+**MCP over SSE (Server-Sent Events):**
+- ✅ **Remote MCP Connections**: Connect to MCP server over HTTP/network
+  - New SSE endpoint: `/mcp/sse` for event stream
+  - New messages endpoint: `/mcp/messages` for JSON-RPC requests
+  - Full MCP protocol compliance over HTTP transport
+- ✅ **Multiple Concurrent Clients**: SSE mode supports multiple clients simultaneously
+- ✅ **Auto-Push Streaming**: New streaming mode with automatic frame delivery
+  - `start_auto_push_stream(stream_id, fps)`: Enable automatic frame pushing
+  - `stop_auto_push_stream_tool(stream_id)`: Disable automatic pushing
+  - Frames sent via SSE notifications without manual capture calls
+- ✅ **Dual Transport Support**:
+  - stdio mode: Local connections (Claude Desktop)
+  - SSE mode: Remote connections (web clients, network access)
+
+**New Module:**
+- `screenmonitormcp_v2/core/mcp_sse_server.py`: Complete MCP over SSE implementation
+  - SSE router for FastAPI integration
+  - MCP protocol message handling over HTTP
+  - Auto-push streaming engine
+  - Broadcast notifications to all connected clients
+
+**New MCP Tools:**
+- `start_auto_push_stream`: Enable automatic frame pushing (SSE mode only)
+- `stop_auto_push_stream_tool`: Disable automatic frame pushing (SSE mode only)
+
+**Enhanced Streaming:**
+- ✅ **stdio Mode**: Manual frame capture with `capture_stream_frame`
+- ✅ **SSE Mode**: Automatic frame delivery at specified FPS
+- ✅ **Backward Compatible**: Existing streaming workflows unchanged
+
+### 📚 Documentation
+
+**New Guide:**
+- `MCP_SSE_GUIDE.md`: Complete guide for MCP over SSE
+  - Installation and setup instructions
+  - Client configuration examples
+  - Auto-push streaming workflows
+  - Security considerations
+  - Performance tuning
+  - Migration guide from stdio to SSE
+
+**Updated Documentation:**
+- README.md: Added MCP over SSE configuration section
+- Streaming prompts: Explains stdio vs SSE modes
+- Tool descriptions: Clarified mode requirements
+
+### 🔧 Dependencies
+
+**HTTP Optional Dependencies:**
+- Added `sse-starlette>=2.0.0` for Server-Sent Events support
+
+### 💡 Use Cases
+
+**stdio Mode (Local):**
+- Claude Desktop integration
+- Single-client local automation
+- No network exposure
+- Manual frame capture
+
+**SSE Mode (Remote):**
+- Remote monitoring dashboards
+- Multi-client screen sharing
+- Network-based automation
+- Auto-push real-time streaming
+- Web-based MCP clients
+
+### 🔄 Migration
+
+**From stdio to SSE:**
+```bash
+# Before: stdio mode
+python -m screenmonitormcp_v2.mcp_main
+
+# After: SSE mode
+pip install screenmonitormcp-v2[http]
+python -m screenmonitormcp_v2
+```
+
+Client configuration changes from `command` to `transport: sse`.
+
 ## [2.5.0] - 2025-11-18 **WINDOWS OPTIMIZATION RELEASE**
 
 ### 🚀 Windows-Specific Performance Enhancements
