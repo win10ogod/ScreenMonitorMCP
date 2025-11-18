@@ -1,7 +1,7 @@
 # CLAUDE.md - AI Assistant Guide for ScreenMonitorMCP v2
 
 > **Last Updated:** 2025-11-18
-> **Version:** 2.0.9
+> **Version:** 2.2.0
 > **Purpose:** Comprehensive guide for AI assistants working on this codebase
 
 ## Table of Contents
@@ -332,14 +332,14 @@ async def cleanup_old_entries(
 
 **Purpose:** Model Context Protocol implementation using FastMCP
 
-**Available Tools (20+):**
+**Available Tools:**
 
-**Screen Analysis:**
-- `analyze_screen` - Capture and analyze with AI
-- `analyze_image` - Analyze provided image
-- `detect_ui_elements` - UI element detection
-- `assess_system_performance` - Performance analysis
-- `detect_anomalies` - Anomaly detection
+**Screen Capture (v2.2+):**
+- `capture_screen_image` - Capture screen and return raw image for client-side analysis (RECOMMENDED)
+
+**AI Status (Optional, HTTP mode only):**
+- `list_ai_models` - List available AI models (if configured)
+- `get_ai_status` - Get AI service status (if configured)
 
 **Streaming:**
 - `create_stream` - Initialize stream
@@ -360,43 +360,53 @@ async def cleanup_old_entries(
 - `get_database_pool_stats` - DB pool statistics
 - `database_pool_health_check` - DB health
 
-**Tool Implementation Pattern:**
+**Tool Implementation Pattern (v2.2+):**
 ```python
 @mcp.tool()
-async def analyze_screen(
-    monitor_id: int = 0,
-    prompt: str = "Analyze this screen",
-    store_in_memory: bool = True
+async def capture_screen_image(
+    monitor: int = 0,
+    format: str = "png",
+    quality: int = 85,
+    include_metadata: bool = True
 ) -> str:
     """
-    Capture and analyze screen with AI
+    Capture screen and return raw image data for client-side analysis
+
+    This is the RECOMMENDED approach - capture the image and let the MCP client
+    (like Claude Desktop) analyze it using its own vision capabilities.
 
     Args:
-        monitor_id: Monitor to capture (0 = primary)
-        prompt: Analysis instructions
-        store_in_memory: Save result to memory
+        monitor: Monitor number to capture (0 for primary)
+        format: Image format (png or jpeg)
+        quality: Image quality for JPEG (1-100)
+        include_metadata: Include capture metadata
 
     Returns:
-        AI analysis result as string
+        JSON string with image data and metadata
     """
-    # 1. Capture screen
-    capture_result = await screen_capture.capture_screen(monitor_id)
+    try:
+        capture_result = await screen_capture.capture_screen(monitor)
+        if not capture_result.get("success"):
+            return f"Error: Failed to capture screen"
 
-    # 2. Analyze with AI
-    analysis = await ai_service.analyze_image(
-        capture_result["image"],
-        prompt
-    )
+        import json
+        result = {
+            "success": True,
+            "image_base64": capture_result["image_data"],
+            "format": format,
+            "monitor": monitor
+        }
 
-    # 3. Store in memory
-    if store_in_memory:
-        await memory_system.add_entry(
-            entry_type="screen_analysis",
-            content=analysis,
-            metadata={"monitor": monitor_id, "prompt": prompt}
-        )
+        if include_metadata:
+            result["metadata"] = {
+                "timestamp": datetime.now().isoformat(),
+                "width": capture_result.get("width"),
+                "height": capture_result.get("height")
+            }
 
-    return analysis
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
 ```
 
 **Protocol Compliance:**
@@ -1268,9 +1278,9 @@ print(f"Active connections: {stats['active_connections']}")
 
 ## Important Architectural Considerations
 
-### ✅ External AI Dependency - RESOLVED (v2.1+)
+### ✅ External AI Dependency - FULLY RESOLVED (v2.2+)
 
-**Previous Design (v2.0.x - Deprecated):**
+**Previous Design (v2.0.x - REMOVED):**
 - Required external AI API (OpenAI, OpenRouter, etc.)
 - Added complexity with API keys and external dependencies
 - Security concerns with API key management
@@ -1280,9 +1290,9 @@ print(f"Active connections: {stats['active_connections']}")
 
 > "I think requiring additional models is not good. We should try to let the MCP client execute completely - this is safer and more conventional."
 
-**✅ NEW Architecture (v2.1+ - IMPLEMENTED):**
+**✅ NEW Architecture (v2.2+ - COMPLETED):**
 
-The system has been refactored to follow MCP best practices by leveraging the MCP client's built-in AI capabilities:
+The system has been completely refactored to follow MCP best practices by leveraging the MCP client's built-in AI capabilities:
 
 1. **✅ Simplified Security**: No API key management needed
 2. **✅ Reduced Dependencies**: OpenAI API is now optional
@@ -1327,19 +1337,19 @@ async def capture_screen_image(
 4. Claude analyzes image using its own vision model
 5. Claude responds with analysis
 
-**Legacy Tools (Deprecated but maintained):**
-- `analyze_screen` - Marked as deprecated, requires external AI
-- `detect_ui_elements` - Marked as deprecated
-- `assess_system_performance` - Marked as deprecated
-- `detect_anomalies` - Marked as deprecated
-- `generate_monitoring_report` - Marked as deprecated
-- `chat_completion` - Marked as deprecated
+**Removed Tools (v2.2+):**
+- ❌ `analyze_screen` - REMOVED, use `capture_screen_image` + client analysis
+- ❌ `detect_ui_elements` - REMOVED, use `capture_screen_image` + client analysis
+- ❌ `assess_system_performance` - REMOVED, use `capture_screen_image` + client analysis
+- ❌ `detect_anomalies` - REMOVED, use `capture_screen_image` + client analysis
+- ❌ `generate_monitoring_report` - REMOVED, use `capture_screen_image` + client analysis
+- ❌ `chat_completion` - REMOVED, use client's native chat
 
-All deprecated tools now display helpful messages guiding users to use `capture_screen_image` instead.
+All server-side AI analysis tools have been completely removed in v2.2.
 
 **Migration Path:**
-- Existing users can continue using legacy tools if they have AI API configured
-- New users should use `capture_screen_image` (no configuration needed)
+- All users MUST migrate to `capture_screen_image` + client-side analysis
+- No configuration needed for new approach
 - See MIGRATION.md for detailed upgrade instructions
 
 **Benefits Achieved:**
@@ -1435,6 +1445,8 @@ When making changes, update:
 
 ## Version History
 
+- **v2.2.0** (2025-11-18): **BREAKING** - Removed all deprecated server-side AI tools, completed migration to client-side analysis
+- **v2.1.0** (2025-11-18): Deprecated server-side AI tools, introduced capture_screen_image
 - **v2.0.9** (2025-11-18): Dependencies cleanup, removed 11 unused packages
 - **v2.0.7** (Recent): Major architecture refactoring, 40-50% memory reduction
 - **v2.0.5** (Recent): Enhanced AI monitor analysis capabilities

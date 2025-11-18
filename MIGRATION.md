@@ -1,12 +1,13 @@
-# Migration Guide: v2.0.x → v2.1+ (Client-Side Analysis)
+# Migration Guide: v2.0.x → v2.2+ (Client-Side Analysis)
 
 ## Overview
 
-ScreenMonitorMCP v2.1+ introduces a significant architectural improvement that makes the system simpler, more secure, and follows MCP best practices.
+ScreenMonitorMCP v2.2+ introduces a significant architectural improvement that makes the system simpler, more secure, and follows MCP best practices.
 
 **What Changed:**
 - **Before (v2.0.x)**: Server performed AI analysis using external APIs (OpenAI, OpenRouter)
-- **After (v2.1+)**: Server only captures screens; your MCP client analyzes images with its own vision model
+- **v2.1**: Deprecated tools marked but still functional
+- **v2.2+ (Current)**: Deprecated tools completely removed; server only captures screens; your MCP client analyzes images with its own vision model
 
 **Why This Change:**
 - ✅ **No API Keys Required** - Works out of the box
@@ -113,23 +114,19 @@ That's it! No configuration files, no API keys, no complexity.
 
 4. **Restart Claude Desktop**
 
-### Option 2: Keep Using Server-Side Analysis (Not Recommended)
+### ~~Option 2: Keep Using Server-Side Analysis~~ (REMOVED in v2.2+)
 
-**When to use:** If you have specific requirements for server-side analysis
+**⚠️ IMPORTANT:** Server-side AI analysis tools have been completely removed in v2.2+
 
-**Note:** This approach is deprecated and may be removed in future versions.
+The following tools are **no longer available**:
+- ❌ `analyze_screen` - REMOVED
+- ❌ `detect_ui_elements` - REMOVED
+- ❌ `assess_system_performance` - REMOVED
+- ❌ `detect_anomalies` - REMOVED
+- ❌ `generate_monitoring_report` - REMOVED
+- ❌ `chat_completion` - REMOVED
 
-**Steps:**
-
-1. Keep your existing configuration with API keys
-2. The deprecated tools will continue to work:
-   - `analyze_screen`
-   - `detect_ui_elements`
-   - `assess_system_performance`
-   - `detect_anomalies`
-   - `generate_monitoring_report`
-
-3. Be aware of deprecation warnings in tool descriptions
+**You must migrate to client-side analysis (Option 1) to continue using ScreenMonitorMCP v2.2+**
 
 ## Tool Migration Reference
 
@@ -139,18 +136,16 @@ That's it! No configuration files, no API keys, no complexity.
 |--------|-------|--------|-------|
 | N/A | `capture_screen_image` | ✅ **NEW & RECOMMENDED** | Returns raw image data for client analysis |
 
-### Deprecated Tools (Still functional but not recommended)
+### Removed Tools (v2.2+)
 
-| Tool | Status | Recommended Alternative |
-|------|--------|------------------------|
-| `analyze_screen` | ⚠️ Deprecated | Use `capture_screen_image` + ask client to analyze |
-| `detect_ui_elements` | ⚠️ Deprecated | Use `capture_screen_image` + ask "identify UI elements" |
-| `assess_system_performance` | ⚠️ Deprecated | Use `capture_screen_image` + ask about performance |
-| `detect_anomalies` | ⚠️ Deprecated | Use `capture_screen_image` + ask about anomalies |
-| `generate_monitoring_report` | ⚠️ Deprecated | Use `capture_screen_image` + ask for report |
-| `chat_completion` | ⚠️ Deprecated | Use your MCP client's native chat |
-| `list_ai_models` | ⚠️ Deprecated | Not needed with client-side analysis |
-| `get_ai_status` | ⚠️ Deprecated | Not needed with client-side analysis |
+| Tool | Status | Required Alternative |
+|------|--------|----------------------|
+| `analyze_screen` | ❌ **REMOVED** | Use `capture_screen_image` + ask client to analyze |
+| `detect_ui_elements` | ❌ **REMOVED** | Use `capture_screen_image` + ask "identify UI elements" |
+| `assess_system_performance` | ❌ **REMOVED** | Use `capture_screen_image` + ask about performance |
+| `detect_anomalies` | ❌ **REMOVED** | Use `capture_screen_image` + ask about anomalies |
+| `generate_monitoring_report` | ❌ **REMOVED** | Use `capture_screen_image` + ask for report |
+| `chat_completion` | ❌ **REMOVED** | Use your MCP client's native chat |
 
 ### Unchanged Tools (Still fully supported)
 
@@ -268,17 +263,17 @@ User: "Do you see anything unusual on my screen?"
 
 ## FAQ
 
-**Q: Will my existing code break?**
-A: No. Deprecated tools still work if you have API keys configured. You'll just see deprecation notices.
+**Q: Will my existing code break if I upgrade to v2.2+?**
+A: Yes, if you're using the old AI analysis tools. You must migrate to `capture_screen_image` and client-side analysis.
 
-**Q: When will deprecated tools be removed?**
-A: They will be maintained for several major versions to allow smooth migration. An announcement will be made before removal.
+**Q: When were deprecated tools removed?**
+A: Version 2.2+ completely removed all deprecated server-side AI analysis tools. They were deprecated in v2.1.
 
-**Q: Can I use both approaches?**
-A: Yes, but it's not recommended. Choose one approach for consistency.
+**Q: Can I still use server-side AI analysis?**
+A: No. Server-side AI analysis has been completely removed in v2.2+. You must use client-side analysis.
 
 **Q: What if my MCP client doesn't have vision capabilities?**
-A: You can continue using the deprecated server-side analysis tools with API configuration.
+A: ScreenMonitorMCP v2.2+ requires an MCP client with vision capabilities (like Claude Desktop). If your client doesn't support vision, you'll need to stay on v2.0.x or find an alternative solution.
 
 **Q: Is the new approach as accurate?**
 A: Yes! Modern MCP clients like Claude Desktop have excellent vision models. Often better than using external APIs.
