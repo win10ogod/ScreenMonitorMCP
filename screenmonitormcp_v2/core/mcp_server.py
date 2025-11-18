@@ -35,6 +35,8 @@ try:
     from .screen_capture import ScreenCapture
     from .streaming import stream_manager
     from .performance_monitor import performance_monitor
+    from .window_capture import window_capture
+    from .preset_loader import preset_loader
     from ..server.config import config
 except ImportError:
     # Fallback for direct execution
@@ -44,6 +46,8 @@ except ImportError:
     from core.screen_capture import ScreenCapture
     from core.streaming import stream_manager
     from core.performance_monitor import performance_monitor
+    from core.window_capture import window_capture
+    from core.preset_loader import preset_loader
     from server.config import config
 
 # Initialize FastMCP server
@@ -1061,6 +1065,392 @@ async def get_gaming_metrics() -> str:
 
     except Exception as e:
         logger.error(f"Failed to get gaming metrics: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def list_windows(filter_visible: bool = True) -> str:
+    """List all windows on the system for game window selection
+
+    Lists all application windows with their titles, positions, and sizes.
+    Useful for finding the game window to optimize capture performance.
+
+    Args:
+        filter_visible: Only include visible windows (default: True)
+
+    Returns:
+        Formatted list of windows with details
+
+    Example:
+        list_windows(filter_visible=True)
+    """
+    try:
+        windows = await window_capture.list_windows(filter_visible)
+
+        if not windows:
+            return "No windows found. Window capture may not be available on this platform."
+
+        response_lines = [
+            f"Found {len(windows)} window(s)",
+            "=" * 70,
+            ""
+        ]
+
+        for i, window in enumerate(windows, 1):
+            response_lines.extend([
+                f"{i}. {window.title}",
+                f"   Position: ({window.x}, {window.y})",
+                f"   Size: {window.width}x{window.height}",
+                f"   PID: {window.pid}",
+                f"   Visible: {window.is_visible}, Minimized: {window.is_minimized}",
+                ""
+            ])
+
+        platform_info = window_capture.get_platform_info()
+        response_lines.extend([
+            "Platform Information:",
+            f"- Platform: {platform_info['platform']}",
+            f"- Window Capture Available: {platform_info['window_capture_available']}",
+            "",
+            "Usage:",
+            "Use find_game_window() to search for a specific game window",
+            "Use capture_game_window() to capture only the game window"
+        ])
+
+        return "\n".join(response_lines)
+
+    except Exception as e:
+        logger.error(f"Failed to list windows: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def find_game_window(
+    game_title: str,
+    case_sensitive: bool = False
+) -> str:
+    """Find a game window by title pattern
+
+    Searches for a window matching the given title pattern.
+    Useful for locating the game window before setting up optimized capture.
+
+    Args:
+        game_title: Game title or pattern to search for (substring match)
+        case_sensitive: Case-sensitive search (default: False)
+
+    Returns:
+        Window information if found, error message otherwise
+
+    Example:
+        find_game_window(game_title="Counter-Strike")
+        find_game_window(game_title="minecraft", case_sensitive=False)
+    """
+    try:
+        window = await window_capture.find_window_by_title(game_title, case_sensitive)
+
+        if not window:
+            return f"Game window not found: '{game_title}'\n\nTip: Use list_windows() to see all available windows"
+
+        response_lines = [
+            f"✓ Found Game Window: {window.title}",
+            "=" * 70,
+            "",
+            "Window Details:",
+            f"- Title: {window.title}",
+            f"- Position: ({window.x}, {window.y})",
+            f"- Size: {window.width}x{window.height}",
+            f"- PID: {window.pid}",
+            f"- Visible: {window.is_visible}",
+            f"- Minimized: {window.is_minimized}",
+            "",
+            "Capture Region:",
+            f"{{",
+            f"  \"left\": {window.x},",
+            f"  \"top\": {window.y},",
+            f"  \"width\": {window.width},",
+            f"  \"height\": {window.height}",
+            f"}}",
+            "",
+            "Next Steps:",
+            "1. Use capture_game_window() to capture this window",
+            "2. Or use create_stream() with window_title parameter for streaming"
+        ]
+
+        if window.is_minimized:
+            response_lines.append("\n⚠ Warning: Window is minimized. Restore it before capturing.")
+
+        return "\n".join(response_lines)
+
+    except Exception as e:
+        logger.error(f"Failed to find game window: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def capture_game_window(
+    window_title: str,
+    format: str = "png",
+    quality: int = 85,
+    case_sensitive: bool = False
+) -> str:
+    """Capture a specific game window instead of the entire screen
+
+    This optimizes performance by capturing only the game window region,
+    reducing CPU usage and improving frame rates for gaming scenarios.
+
+    Args:
+        window_title: Game window title or pattern to search for
+        format: Image format (png or jpeg, default: png)
+        quality: JPEG quality 1-100 (default: 85)
+        case_sensitive: Case-sensitive title search (default: False)
+
+    Returns:
+        JSON string with image data and metadata
+
+    Example:
+        capture_game_window(window_title="Counter-Strike", format="jpeg", quality=75)
+    """
+    try:
+        # Find the game window
+        window = await window_capture.find_window_by_title(window_title, case_sensitive)
+
+        if not window:
+            return f"Error: Game window not found: '{window_title}'. Use list_windows() to find it."
+
+        if window.is_minimized:
+            return f"Error: Window '{window.title}' is minimized. Please restore it first."
+
+        # Get the window region
+        region = {
+            "left": window.x,
+            "top": window.y,
+            "width": window.width,
+            "height": window.height
+        }
+
+        # Capture the region
+        capture_result = await screen_capture.capture_screen(
+            monitor_id=0,  # Use primary monitor
+            region=region,
+            format=format,
+            quality=quality
+        )
+
+        if not capture_result.get("success"):
+            return f"Error: Failed to capture window"
+
+        import json
+        result = {
+            "success": True,
+            "window_title": window.title,
+            "window_pid": window.pid,
+            "image_base64": capture_result["image_data"],
+            "format": format,
+            "region": region,
+            "metadata": {
+                "timestamp": datetime.now().isoformat(),
+                "width": window.width,
+                "height": window.height,
+                "capture_mode": "window_optimized"
+            }
+        }
+
+        return json.dumps(result, indent=2)
+
+    except Exception as e:
+        logger.error(f"Failed to capture game window: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+def list_gaming_presets() -> str:
+    """List all available gaming presets
+
+    Shows all predefined gaming configurations including:
+    - Standard presets (casual, competitive, esports, etc.)
+    - Game-specific presets (Counter-Strike, League of Legends, etc.)
+
+    Returns:
+        Formatted list of available presets with descriptions
+    """
+    try:
+        presets = preset_loader.list_presets()
+
+        if not presets:
+            return "No gaming presets available. Check gaming_presets.json file."
+
+        response_lines = [
+            "Available Gaming Presets",
+            "=" * 70,
+            ""
+        ]
+
+        # Separate standard and game-specific presets
+        standard_presets = {}
+        game_presets = {}
+
+        for name, desc in presets.items():
+            if name in ["screenshot", "casual_gaming", "competitive_gaming", "esports",
+                       "streaming_observer", "mobile_gaming", "retro_gaming", "vr_gaming",
+                       "recording", "low_end_system"]:
+                standard_presets[name] = desc
+            else:
+                game_presets[name] = desc
+
+        # List standard presets
+        response_lines.extend([
+            "Standard Presets:",
+            "-" * 70,
+            ""
+        ])
+
+        for name, desc in standard_presets.items():
+            response_lines.append(f"• {name}")
+            response_lines.append(f"  {desc}")
+            response_lines.append("")
+
+        # List game-specific presets if any
+        if game_presets:
+            response_lines.extend([
+                "",
+                "Game-Specific Presets:",
+                "-" * 70,
+                ""
+            ])
+
+            for name, desc in game_presets.items():
+                response_lines.append(f"• {name}")
+                response_lines.append(f"  {desc}")
+                response_lines.append("")
+
+        response_lines.extend([
+            "",
+            "Usage:",
+            "1. Get preset details: get_preset_info(preset_name='competitive_gaming')",
+            "2. Use preset: use_gaming_preset(preset_name='competitive_gaming')",
+            "3. Customize: use_gaming_preset(preset_name='esports', fps=90, quality=40)"
+        ])
+
+        return "\n".join(response_lines)
+
+    except Exception as e:
+        logger.error(f"Failed to list presets: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+def get_preset_info(preset_name: str) -> str:
+    """Get detailed information about a gaming preset
+
+    Shows complete configuration details for a specific preset including:
+    - FPS and quality settings
+    - Format and optimization options
+    - Expected latency
+    - Recommended use cases
+
+    Args:
+        preset_name: Name of the preset (e.g., 'competitive_gaming', 'esports')
+
+    Returns:
+        Detailed preset information
+
+    Example:
+        get_preset_info(preset_name='competitive_gaming')
+    """
+    try:
+        info = preset_loader.get_preset_info(preset_name)
+
+        if not info:
+            return f"Preset not found: '{preset_name}'\n\nUse list_gaming_presets() to see all available presets."
+
+        return info
+
+    except Exception as e:
+        logger.error(f"Failed to get preset info: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def use_gaming_preset(
+    preset_name: str,
+    fps: Optional[int] = None,
+    quality: Optional[int] = None
+) -> str:
+    """Apply a gaming preset configuration
+
+    Load and apply a predefined gaming configuration from presets.
+    You can override specific settings while using a preset as base.
+
+    Args:
+        preset_name: Name of the preset to use
+        fps: Override FPS setting (optional)
+        quality: Override quality setting (optional)
+
+    Returns:
+        Configuration status and details
+
+    Example:
+        use_gaming_preset(preset_name='competitive_gaming')
+        use_gaming_preset(preset_name='esports', fps=90, quality=40)
+    """
+    try:
+        # Build overrides
+        overrides = {}
+        if fps is not None:
+            overrides['fps'] = fps
+        if quality is not None:
+            overrides['quality'] = quality
+
+        # Load preset config
+        game_config = preset_loader.get_config_from_preset(preset_name, **overrides)
+
+        if not game_config:
+            return f"Error: Preset not found: '{preset_name}'\n\nUse list_gaming_presets() to see all available presets."
+
+        # Apply configuration to server config
+        config.enable_gaming_mode = True
+        config.gaming_max_fps = game_config.fps
+        config.gaming_quality = game_config.quality
+        config.gaming_enable_frame_skip = game_config.enable_frame_skip
+        config.gaming_adaptive_quality = game_config.adaptive_quality
+        config.gaming_cache_size = game_config.cache_size
+
+        # Get preset info for display
+        preset = preset_loader.get_preset(preset_name)
+        preset_info = preset.get("name", preset_name) if preset else preset_name
+
+        response_lines = [
+            f"✓ Gaming Preset Applied: {preset_info}",
+            "=" * 70,
+            "",
+            "Active Configuration:",
+            f"- FPS: {game_config.fps}",
+            f"- Quality: {game_config.quality}%",
+            f"- Format: {game_config.format.upper()}",
+            f"- Frame Skipping: {'Enabled' if game_config.enable_frame_skip else 'Disabled'}",
+            f"- Adaptive Quality: {'Enabled' if game_config.adaptive_quality else 'Disabled'}",
+            f"- Cache Size: {game_config.cache_size} frames",
+            ""
+        ]
+
+        if preset:
+            response_lines.extend([
+                f"Expected Latency: {preset.get('expected_latency_ms', 'N/A')}ms",
+                f"Recommended For: {preset.get('recommended_for', 'N/A')}",
+                ""
+            ])
+
+            if "use_cases" in preset:
+                response_lines.append("Optimized For:")
+                for use_case in preset["use_cases"]:
+                    response_lines.append(f"  • {use_case}")
+                response_lines.append("")
+
+        response_lines.extend([
+            "Next Steps:",
+            "1. Use create_stream() to start streaming",
+            "2. Monitor performance with get_gaming_metrics()",
+            "3. For lowest latency, use WebSocket at /mcp/game-stream"
+        ])
+
+        return "\n".join(response_lines)
+
+    except Exception as e:
+        logger.error(f"Failed to use preset: {e}")
         return f"Error: {str(e)}"
 
 # Additional deprecated AI tools removed (v2.1+)
