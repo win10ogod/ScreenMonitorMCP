@@ -30,6 +30,14 @@ class ServerConfig(BaseSettings):
     default_stream_quality: int = Field(60, description="Default streaming quality - Optimized for performance")
     max_concurrent_streams: int = Field(25, description="Maximum concurrent streams - Reduced for stability")
     stream_buffer_size: int = Field(10, description="Stream buffer size - Reduced to prevent memory issues")
+
+    # Gaming mode settings (v2.6+)
+    enable_gaming_mode: bool = Field(False, description="Enable gaming mode optimizations")
+    gaming_max_fps: int = Field(60, description="Maximum FPS in gaming mode")
+    gaming_quality: int = Field(50, description="Image quality in gaming mode (lower = better performance)")
+    gaming_enable_frame_skip: bool = Field(True, description="Enable frame skipping in gaming mode")
+    gaming_adaptive_quality: bool = Field(True, description="Enable adaptive quality in gaming mode")
+    gaming_cache_size: int = Field(120, description="Frame cache size in gaming mode (frames)")
     
     # Connection settings - Enhanced for stability
     max_connections: int = Field(250, description="Maximum concurrent connections - Reduced for stability")
