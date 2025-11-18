@@ -369,31 +369,58 @@ async def broadcast_to_sse_clients(message: Dict[str, Any]):
 
 # Auto-push streaming functionality
 _auto_push_streams: Dict[str, asyncio.Task] = {}
+_stream_metrics: Dict[str, Any] = {}  # Performance metrics per stream
 
 
 async def _auto_push_stream_frames(stream_id: str, interval: float = 1.0):
-    """Automatically push stream frames to SSE clients.
+    """Automatically push stream frames to SSE clients with frame skipping.
 
     Args:
         stream_id: Stream ID to push frames from
         interval: Interval between frames in seconds
     """
-    logger.info(f"Starting auto-push for stream {stream_id}")
+    import time
+    from .gaming_mode import FrameSkipper, FrameMetrics
+
+    logger.info(f"Starting auto-push for stream {stream_id} at {1.0/interval:.1f} FPS")
+
+    # Initialize frame skipper and metrics
+    skipper = FrameSkipper(
+        target_fps=int(1.0 / interval),
+        max_skip=5,
+        skip_threshold_ms=50.0
+    )
+    metrics = FrameMetrics(window_size=100)
+    _stream_metrics[stream_id] = metrics
+
+    last_frame_time = time.time()
 
     try:
         while True:
+            frame_start = time.time()
+
             # Check if stream still exists
             stream_info = await stream_manager.get_stream_info(stream_id)
             if not stream_info:
                 logger.info(f"Stream {stream_id} no longer exists, stopping auto-push")
                 break
 
+            # Check if we should skip this frame
+            if skipper.should_skip_frame():
+                # Frame skipped to maintain target FPS
+                metrics.add_frame(0, 0, 0, skipped=True)
+                await asyncio.sleep(interval * 0.5)  # Brief sleep before next check
+                continue
+
             # Capture frame
+            capture_start = time.time()
             monitor = stream_info.get("monitor", 0)
             capture_result = await screen_capture.capture_screen(monitor)
+            capture_time = (time.time() - capture_start) * 1000  # ms
 
             if capture_result.get("success"):
-                # Create resource URI
+                # Encode/prepare resource
+                encode_start = time.time()
                 from .mcp_server import _add_to_cache
 
                 metadata = {
@@ -410,8 +437,10 @@ async def _auto_push_stream_frames(stream_id: str, interval: float = 1.0):
                     mime_type,
                     metadata
                 )
+                encode_time = (time.time() - encode_start) * 1000  # ms
 
                 # Broadcast frame notification to SSE clients
+                network_start = time.time()
                 await broadcast_to_sse_clients({
                     "jsonrpc": "2.0",
                     "method": "notifications/resources/updated",
@@ -421,14 +450,37 @@ async def _auto_push_stream_frames(stream_id: str, interval: float = 1.0):
                         "metadata": metadata
                     }
                 })
+                network_time = (time.time() - network_start) * 1000  # ms
+
+                # Record performance metrics
+                metrics.add_frame(capture_time, encode_time, network_time)
+                skipper.mark_frame_processed()
+
+                # Log performance every 60 frames
+                if metrics.total_frames % 60 == 0:
+                    stats = metrics.get_stats()
+                    logger.info(f"Stream {stream_id} performance: "
+                              f"{stats['current_fps']:.1f} FPS, "
+                              f"{stats['avg_frame_time_ms']:.1f}ms/frame, "
+                              f"{stats['drop_rate_percent']:.1f}% dropped, "
+                              f"{stats['skip_rate_percent']:.1f}% skipped")
 
             # Wait for next frame
-            await asyncio.sleep(interval)
+            elapsed = time.time() - frame_start
+            sleep_time = max(0, interval - elapsed)
+            if sleep_time > 0:
+                await asyncio.sleep(sleep_time)
 
     except asyncio.CancelledError:
         logger.info(f"Auto-push cancelled for stream {stream_id}")
+        # Cleanup metrics
+        if stream_id in _stream_metrics:
+            del _stream_metrics[stream_id]
     except Exception as e:
         logger.error(f"Auto-push error for stream {stream_id}: {e}", exc_info=True)
+        # Cleanup metrics
+        if stream_id in _stream_metrics:
+            del _stream_metrics[stream_id]
 
 
 async def start_auto_push_stream(stream_id: str, fps: int = 5):
@@ -460,4 +512,57 @@ async def stop_auto_push_stream(stream_id: str):
     if stream_id in _auto_push_streams:
         _auto_push_streams[stream_id].cancel()
         del _auto_push_streams[stream_id]
+        # Cleanup metrics
+        if stream_id in _stream_metrics:
+            del _stream_metrics[stream_id]
         logger.info(f"Stopped auto-push for stream {stream_id}")
+
+
+@sse_router.get("/metrics")
+async def get_stream_metrics():
+    """Get performance metrics for all active streams.
+
+    Returns:
+        JSON with metrics for each stream
+    """
+    metrics_data = {}
+
+    for stream_id, metrics in _stream_metrics.items():
+        stats = metrics.get_stats()
+        metrics_data[stream_id] = stats
+
+    return {
+        "success": True,
+        "timestamp": datetime.now().isoformat(),
+        "streams": metrics_data,
+        "active_streams": len(_stream_metrics),
+        "total_connections": len(_sse_connections)
+    }
+
+
+@sse_router.get("/metrics/{stream_id}")
+async def get_single_stream_metrics(stream_id: str):
+    """Get performance metrics for a specific stream.
+
+    Args:
+        stream_id: Stream ID to get metrics for
+
+    Returns:
+        JSON with stream metrics or error
+    """
+    if stream_id not in _stream_metrics:
+        return {
+            "success": False,
+            "error": f"No metrics available for stream {stream_id}",
+            "message": "Stream not found or not using auto-push"
+        }
+
+    metrics = _stream_metrics[stream_id]
+    stats = metrics.get_stats()
+
+    return {
+        "success": True,
+        "timestamp": datetime.now().isoformat(),
+        "stream_id": stream_id,
+        "metrics": stats
+    }

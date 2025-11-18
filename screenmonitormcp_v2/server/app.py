@@ -23,6 +23,14 @@ except ImportError:
     SSE_AVAILABLE = False
     sse_router = None
 
+# Import Gaming WebSocket router
+try:
+    from ..core.gaming_websocket import gaming_ws_router
+    GAMING_WS_AVAILABLE = True
+except ImportError:
+    GAMING_WS_AVAILABLE = False
+    gaming_ws_router = None
+
 logger = structlog.get_logger()
 
 # Create app factory for testing
@@ -111,6 +119,11 @@ if SSE_AVAILABLE and sse_router:
     app.include_router(sse_router, prefix="/mcp")
     logger.info("MCP over SSE enabled at /mcp/sse")
 
+# Include Gaming WebSocket router if available
+if GAMING_WS_AVAILABLE and gaming_ws_router:
+    app.include_router(gaming_ws_router, prefix="/mcp")
+    logger.info("Gaming WebSocket enabled at /mcp/game-stream")
+
 
 @app.get("/")
 async def root():
@@ -127,7 +140,16 @@ async def root():
         endpoints["mcp"] = {
             "sse": "/mcp/sse",
             "messages": "/mcp/messages",
+            "metrics": "/mcp/metrics",
             "description": "MCP over HTTP (Server-Sent Events)"
+        }
+
+    # Add Gaming WebSocket endpoint if available
+    if GAMING_WS_AVAILABLE:
+        endpoints["gaming"] = {
+            "websocket": "/mcp/game-stream",
+            "info": "/mcp/game-stream/info",
+            "description": "High-performance gaming stream (WebSocket)"
         }
 
     return {

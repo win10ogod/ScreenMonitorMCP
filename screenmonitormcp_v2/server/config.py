@@ -23,13 +23,21 @@ class ServerConfig(BaseSettings):
     )
     cors_credentials: bool = Field(True, description="Allow CORS credentials")
     
-    # Streaming settings - Optimized for client stability
-    max_stream_fps: int = Field(10, description="Maximum streaming FPS - Reduced for client stability")
-    default_stream_fps: int = Field(1, description="Default streaming FPS - Conservative default")
-    max_stream_quality: int = Field(75, description="Maximum streaming quality - Reduced for bandwidth")
+    # Streaming settings - Optimized for gaming and performance (v2.7+)
+    max_stream_fps: int = Field(60, description="Maximum streaming FPS - Increased for gaming support")
+    default_stream_fps: int = Field(5, description="Default streaming FPS - Balanced default")
+    max_stream_quality: int = Field(95, description="Maximum streaming quality")
     default_stream_quality: int = Field(60, description="Default streaming quality - Optimized for performance")
     max_concurrent_streams: int = Field(25, description="Maximum concurrent streams - Reduced for stability")
-    stream_buffer_size: int = Field(10, description="Stream buffer size - Reduced to prevent memory issues")
+    stream_buffer_size: int = Field(120, description="Stream buffer size - Increased for high FPS (frames)")
+
+    # Gaming mode settings (v2.6+)
+    enable_gaming_mode: bool = Field(False, description="Enable gaming mode optimizations")
+    gaming_max_fps: int = Field(60, description="Maximum FPS in gaming mode")
+    gaming_quality: int = Field(50, description="Image quality in gaming mode (lower = better performance)")
+    gaming_enable_frame_skip: bool = Field(True, description="Enable frame skipping in gaming mode")
+    gaming_adaptive_quality: bool = Field(True, description="Enable adaptive quality in gaming mode")
+    gaming_cache_size: int = Field(120, description="Frame cache size in gaming mode (frames)")
     
     # Connection settings - Enhanced for stability
     max_connections: int = Field(250, description="Maximum concurrent connections - Reduced for stability")
