@@ -94,12 +94,15 @@ def _add_to_cache(image_data: str, mime_type: str, metadata: dict) -> str:
     return resource_uri
 
 @mcp.resource("screen://capture/{capture_id}")
-async def get_screen_capture(uri: str) -> str:
+async def get_screen_capture(capture_id: str) -> str:
     """Get a captured screen image by resource URI.
 
     This resource provides the actual image data for captures.
     Use capture_screen tool to create new captures.
     """
+    # Reconstruct full URI from capture_id
+    uri = f"screen://capture/{capture_id}"
+
     if uri not in _image_cache:
         raise ValueError(f"Capture not found: {uri}")
 
