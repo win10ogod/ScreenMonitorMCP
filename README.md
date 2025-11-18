@@ -155,14 +155,20 @@ Note: This approach is deprecated. Use the recommended client-side analysis inst
   - Cache keeps last 10 captures for resource requests
   - **This is the ONLY way to capture screens** - simple and efficient
 
-### Streaming & Monitoring
+### System Monitoring
 
-- `create_stream` - Start live screen streaming
+- `get_performance_metrics` - System health and performance metrics
+- `get_system_status` - Overall system status
+- `get_capture_backend_info` - Screenshot backend status (MSS/DXGI/WGC)
+
+### Streaming (HTTP Mode Only)
+
+**Note**: Streaming is designed for HTTP/WebSocket mode. For MCP mode, use `capture_screen` for single screenshots.
+
+- `create_stream` - Start live screen streaming (HTTP mode)
 - `list_streams` - List active streams
 - `stop_stream` - Stop a stream
 - `get_stream_info` - Get stream information
-- `get_performance_metrics` - System health monitoring
-- `get_system_status` - Overall system status
 
 ### Memory & Database
 
