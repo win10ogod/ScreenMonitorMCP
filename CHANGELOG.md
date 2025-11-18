@@ -214,6 +214,49 @@ print(f"Average capture time: {stats['avg_capture_time_ms']}ms")
 
 **Addresses user feedback:** "image_base64太長了" (base64 data too long)
 
+### 🔥 BREAKING CHANGES
+
+**Complete Removal of External AI Dependencies from MCP Mode:**
+
+**User Feedback:** "這是你的問題, 你根本沒有重構, 應該完全刪除掉外部ai" (You didn't actually refactor, you should completely remove external AI)
+
+**What Was Removed:**
+- ❌ `list_ai_models()` tool - HTTP mode only, not needed in MCP
+- ❌ `get_ai_status()` tool - HTTP mode only, not needed in MCP
+- ❌ `analyze_scene_from_memory()` tool - required external AI service
+- ❌ `query_memory()` tool - required external AI service
+- ❌ AI service import and initialization code
+- ❌ All AI_SERVICE_AVAILABLE checks and references
+
+**Why This Is Correct:**
+- ✅ **MCP clients have built-in vision** - Claude Desktop, etc. analyze images themselves
+- ✅ **No external API needed** - No OPENAI_API_KEY configuration required
+- ✅ **No confusing errors** - Users won't see "Incorrect API key" errors in MCP mode
+- ✅ **Simpler architecture** - Clear separation: MCP captures, client analyzes
+- ✅ **True MCP protocol compliance** - Resources for data, client does processing
+
+**Remaining Tools (All Work Without External AI):**
+- ✅ `capture_screen` - Returns resource URI for client-side analysis
+- ✅ `capture_screen_base64` - Returns compressed base64 (fallback)
+- ✅ `get_capture_backend_info` - Backend status information
+- ✅ `get_system_status` - System health (AI references removed)
+- ✅ `get_performance_metrics` - Performance statistics
+- ✅ Streaming tools: `create_stream`, `list_streams`, `stop_stream`, `get_stream_info`
+- ✅ Memory tools: `get_memory_statistics`, `get_memory_usage`, etc.
+- ✅ Database tools: `get_database_pool_stats`, `database_pool_health_check`
+
+**Migration:**
+- Old: Tools returned AI analysis results
+- New: Tools return images, MCP client analyzes them
+- No configuration needed - it just works!
+
+**For HTTP Server Mode:**
+- AI service still available for HTTP/REST API users
+- External AI API configuration only needed for HTTP mode
+- MCP mode is completely independent
+
+This is the **correct MCP architecture**: Capture → Return → Client Analyzes
+
 ### 🐛 Bug Fixes
 
 **Critical Runtime Fixes:**

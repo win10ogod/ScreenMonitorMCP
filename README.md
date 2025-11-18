@@ -165,27 +165,28 @@ Note: This approach is deprecated. Use the recommended client-side analysis inst
 - `create_stream` - Start live screen streaming
 - `list_streams` - List active streams
 - `stop_stream` - Stop a stream
+- `get_stream_info` - Get stream information
 - `get_performance_metrics` - System health monitoring
 - `get_system_status` - Overall system status
 
-### Legacy Tools (Deprecated - Require External AI API)
+### Memory & Database
 
-- `analyze_screen` - Server-side AI analysis (deprecated)
-- `detect_ui_elements` - UI element detection (deprecated)
-- `assess_system_performance` - Performance assessment (deprecated)
-- `detect_anomalies` - Anomaly detection (deprecated)
-- `generate_monitoring_report` - Generate reports (deprecated)
-- `chat_completion` - Chat completion (deprecated)
+- `get_memory_statistics` - Memory system statistics
+- `get_memory_usage` - Detailed memory usage
+- `get_database_pool_stats` - Database connection pool statistics
+- `database_pool_health_check` - Database health check
 
-**Note:** Legacy tools are maintained for backward compatibility but are not recommended for new implementations.
+### Backend Information
+
+- `get_capture_backend_info` - Screen capture backend status (MSS/DXGI/WGC)
 
 ## Use Cases
 
-- **UI/UX Analysis**: Get AI insights on interface design and usability
-- **Debugging Assistance**: Visual debugging with AI-powered error detection
-- **Content Creation**: Automated screenshot documentation and analysis
-- **Accessibility Testing**: Screen reader and accessibility compliance checking
-- **System Monitoring**: Visual system health and performance tracking
+- **Screen Analysis**: Capture screenshots for AI client analysis (Claude Desktop, etc.)
+- **Debugging Assistance**: Visual debugging with screenshot capture
+- **Content Creation**: Automated screenshot documentation
+- **Accessibility Testing**: Screen capture for accessibility review
+- **System Monitoring**: Visual system health tracking
 
 ## Documentation
 
@@ -193,9 +194,9 @@ For detailed setup instructions and advanced configuration, see our [MCP Setup G
 
 ## Requirements
 
-- Python 3.8+
-- OpenAI API key (or compatible service)
+- Python 3.10+
 - MCP-compatible client (Claude Desktop, etc.)
+- **No external API keys required** for MCP mode
 
 ## Contributing
 
