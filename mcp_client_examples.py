@@ -38,10 +38,10 @@ async def connect_direct_mcp():
                 for tool in tools_result.tools:
                     print(f"  🔧 {tool.name}: {tool.description}")
                 
-                # Example: Capture screen
+                # Example: Capture screen image
                 capture_result = await session.call_tool(
-                    "capture_screen",
-                    arguments={"monitor": 0, "format": "png"}
+                    "capture_screen_image",
+                    arguments={"monitor": 0, "format": "png", "include_metadata": True}
                 )
                 print(f"📸 Screen capture result: {capture_result}")
                 
@@ -111,10 +111,11 @@ async def example_jsonrpc_client():
     capture_response = await client.send_request(
         "tools/call",
         {
-            "name": "capture_screen",
+            "name": "capture_screen_image",
             "arguments": {
                 "monitor": 0,
-                "format": "png"
+                "format": "png",
+                "include_metadata": True
             }
         }
     )
@@ -131,12 +132,10 @@ def generate_claude_desktop_config() -> Dict[str, Any]:
                 "args": [
                     "-m",
                     "screenmonitormcp_v2.mcp_main"
-                ],
-                "env": {
-                    "OPENAI_API_KEY": "your-openai-api-key-here",
-                    "ANTHROPIC_API_KEY": "your-anthropic-api-key-here",
-                    "GOOGLE_API_KEY": "your-google-api-key-here"
-                }
+                ]
+                # No API keys required! The MCP client (like Claude Desktop)
+                # handles AI analysis using its own built-in capabilities.
+                # This is more secure and simpler to set up.
             }
         }
     }
@@ -152,40 +151,13 @@ def list_available_tools() -> List[Dict[str, Any]]:
     """
     tools = [
         {
-            "name": "capture_screen",
-            "description": "Capture a screenshot of the current screen",
+            "name": "capture_screen_image",
+            "description": "Capture screen and return raw image data for client-side analysis (RECOMMENDED)",
             "parameters": {
                 "monitor": "Monitor number to capture (0 for primary)",
-                "region": "Specific region to capture (optional)",
-                "format": "Image format (png/jpeg)"
-            }
-        },
-        {
-            "name": "analyze_screen",
-            "description": "Analyze the current screen content using AI vision",
-            "parameters": {
-                "query": "What to analyze or look for in the screen",
-                "monitor": "Monitor number to analyze (0 for primary)",
-                "detail_level": "Level of detail for analysis (low/high)"
-            }
-        },
-        {
-            "name": "analyze_image",
-            "description": "Analyze an image file using AI vision",
-            "parameters": {
-                "image_path": "Path to the image file to analyze",
-                "query": "What to analyze or look for in the image",
-                "detail_level": "Level of detail for analysis (low/high)"
-            }
-        },
-        {
-            "name": "chat_completion",
-            "description": "Generate AI chat completion responses",
-            "parameters": {
-                "messages": "List of chat messages",
-                "model": "AI model to use (optional)",
-                "max_tokens": "Maximum tokens in response (optional)",
-                "temperature": "Response creativity (0.0-1.0, optional)"
+                "format": "Image format (png/jpeg)",
+                "quality": "Image quality for JPEG (1-100)",
+                "include_metadata": "Include capture metadata (optional)"
             }
         },
         {

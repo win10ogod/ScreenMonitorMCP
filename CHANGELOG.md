@@ -5,6 +5,63 @@ All notable changes to ScreenMonitorMCP v2 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2025-11-18 **BREAKING CHANGES**
+
+### ⚠️ Breaking Changes
+- **Removed All Deprecated Server-Side AI Tools**: Completed migration to client-side analysis architecture
+- **Required Migration**: All users must migrate to `capture_screen_image` + client-side analysis pattern
+- **No More External AI Dependencies**: External AI APIs no longer required for MCP mode
+
+### 🗑️ Removed - Legacy AI Analysis Tools
+- **Removed MCP Tools**:
+  - `analyze_screen` - Use `capture_screen_image` + ask client to analyze
+  - `detect_ui_elements` - Use `capture_screen_image` + ask "identify UI elements"
+  - `assess_system_performance` - Use `capture_screen_image` + ask about performance
+  - `detect_anomalies` - Use `capture_screen_image` + ask about anomalies
+  - `generate_monitoring_report` - Use `capture_screen_image` + ask for report
+  - `chat_completion` - Use your MCP client's native chat capabilities
+
+- **Removed AI Service Methods** (from `core/ai_service.py`):
+  - `detect_ui_elements()` - Specialized UI analysis (no longer needed)
+  - `assess_system_performance()` - Performance analysis (no longer needed)
+  - `detect_anomalies()` - Anomaly detection (no longer needed)
+  - `generate_monitoring_report()` - Report generation (no longer needed)
+  - `extract_text()` - OCR functionality (no longer needed)
+  - `analyze_screen_for_task()` - Task-specific analysis (no longer needed)
+
+### ✨ Benefits of Removal
+- **Simplified Architecture**: Reduced codebase by ~800 lines
+- **Better Security**: No API key management required
+- **Improved Privacy**: Images analyzed client-side, not sent to external services
+- **Lower Costs**: No AI API usage fees
+- **Easier Setup**: Works out of the box with no configuration
+- **MCP Best Practices**: Follows official MCP protocol recommendations
+
+### 📦 Retained Components
+- **Core AI Service**: Maintained for optional HTTP/REST API mode
+- **Screen Capture**: `capture_screen_image` tool fully functional
+- **Streaming System**: All streaming tools unchanged
+- **Memory System**: All memory management tools unchanged
+- **Performance Monitoring**: System health tools unchanged
+- **Database Tools**: Connection pool management tools unchanged
+
+### 📝 Documentation Updates
+- **NEW**: `REFACTORING_ROADMAP.md` - Complete roadmap for future development
+- **Updated**: `MIGRATION.md` - Updated to reflect tool removal (not just deprecation)
+- **Updated**: `CLAUDE.md` - Architecture section updated for v2.2
+- **Updated**: `mcp_client_examples.py` - Examples updated to use new patterns
+
+### 🔄 Migration Required
+- See [MIGRATION.md](MIGRATION.md) for complete migration guide
+- All users upgrading from v2.0.x or v2.1.x must update their usage patterns
+- No configuration changes needed - just update tool usage
+
+### 🚀 Future Plans
+- Phase 2 (v2.3.0): Make AI service completely optional for MCP-only deployments
+- Phase 3 (v2.4.0): Performance optimizations and memory improvements
+- Phase 4 (v2.5.0): Enhanced monitoring and observability
+- See [REFACTORING_ROADMAP.md](REFACTORING_ROADMAP.md) for complete roadmap
+
 ## [2.0.9] - 2025-01-08
 
 ### 🧹 Dependencies Cleanup
