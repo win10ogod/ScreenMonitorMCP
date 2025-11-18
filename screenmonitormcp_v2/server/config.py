@@ -50,10 +50,20 @@ class ServerConfig(BaseSettings):
         description="Log format: json, plain"
     )
     
-    # AI Provider settings
-    openai_api_key: Optional[str] = Field(None, description="OpenAI API key")
+    # Mode settings (v2.3+)
+    server_mode: str = Field(
+        "mcp",
+        description="Server mode: 'mcp' (MCP-only, no AI required) or 'http' (HTTP server with optional AI)"
+    )
+    enable_ai_service: bool = Field(
+        False,
+        description="Enable AI service (optional for HTTP mode, not needed for MCP mode)"
+    )
+
+    # AI Provider settings (Optional - only needed for HTTP mode with AI enabled)
+    openai_api_key: Optional[str] = Field(None, description="OpenAI API key (optional, for HTTP mode only)")
     openai_base_url: Optional[str] = Field(None, description="OpenAI API base URL (for compatible APIs)")
-    openai_model: str = Field("gpt-4o", description="OpenAI model name - Optimized for monitor analysis")
+    openai_model: str = Field("gpt-4o", description="OpenAI model name")
     openai_timeout: int = Field(30, description="OpenAI timeout in seconds")
     
     # Cache settings

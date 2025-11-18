@@ -25,7 +25,6 @@ from mcp.server.fastmcp import FastMCP
 
 try:
     from .screen_capture import ScreenCapture
-    from .ai_service import ai_service
     from .streaming import stream_manager
     from .performance_monitor import performance_monitor
     from ..server.config import config
@@ -35,10 +34,27 @@ except ImportError:
     from pathlib import Path
     sys.path.append(str(Path(__file__).parent.parent))
     from core.screen_capture import ScreenCapture
-    from core.ai_service import ai_service
     from core.streaming import stream_manager
     from core.performance_monitor import performance_monitor
     from server.config import config
+
+# AI service is optional for MCP mode (only needed for HTTP server mode)
+AI_SERVICE_AVAILABLE = False
+ai_service = None
+try:
+    try:
+        from .ai_service import ai_service as _ai_service
+    except ImportError:
+        from core.ai_service import ai_service as _ai_service
+
+    ai_service = _ai_service
+    AI_SERVICE_AVAILABLE = ai_service.is_available() if ai_service else False
+    if AI_SERVICE_AVAILABLE:
+        logger.info("AI service initialized (optional, for HTTP mode)")
+    else:
+        logger.info("AI service loaded but not configured (MCP-only mode)")
+except ImportError:
+    logger.info("AI service not loaded - MCP-only mode (recommended)")
 
 # Configure logger to use stderr for MCP mode
 logger = logging.getLogger(__name__)
@@ -107,17 +123,23 @@ async def capture_screen_image(
 
 @mcp.tool()
 async def list_ai_models() -> str:
-    """List available AI models from the configured provider
-    
+    """List available AI models from the configured provider (HTTP mode only)
+
+    Note: This tool is only available when AI service is configured.
+    MCP mode does not require AI service configuration.
+
     Returns:
         List of available models as text
     """
     try:
+        if not AI_SERVICE_AVAILABLE or ai_service is None:
+            return "AI service not available. This tool is for HTTP server mode only. MCP mode uses client-side analysis."
+
         if not ai_service.is_available():
-            return "Error: AI service is not available. Please configure your AI provider."
-        
+            return "Error: AI service is not configured. Please set OPENAI_API_KEY."
+
         result = await ai_service.list_models()
-        
+
         if result.get("success"):
             models = result.get("models", [])
             if models:
@@ -132,12 +154,18 @@ async def list_ai_models() -> str:
 
 @mcp.tool()
 def get_ai_status() -> str:
-    """Get AI service configuration status
-    
+    """Get AI service configuration status (HTTP mode only)
+
+    Note: This tool is only relevant when AI service is configured.
+    MCP mode does not require AI service configuration.
+
     Returns:
         AI service status information
     """
     try:
+        if not AI_SERVICE_AVAILABLE or ai_service is None:
+            return "AI service not loaded (MCP-only mode). This is normal and recommended for MCP usage."
+
         status = ai_service.get_status()
         return f"AI Service Status: {status}"
     except Exception as e:
@@ -167,14 +195,15 @@ def get_performance_metrics() -> str:
 @mcp.tool()
 def get_system_status() -> str:
     """Get overall system status and health information
-    
+
     Returns:
         System status information
     """
     try:
         status = {
             "timestamp": datetime.now().isoformat(),
-            "ai_service": ai_service.is_available(),
+            "ai_service": ai_service.is_available() if AI_SERVICE_AVAILABLE and ai_service else False,
+            "ai_service_mode": "HTTP only" if AI_SERVICE_AVAILABLE else "Not loaded (MCP-only)",
             "screen_capture": screen_capture.is_available(),
             "performance_monitor": performance_monitor.is_running(),
             "stream_manager": stream_manager.is_running()
@@ -266,18 +295,24 @@ async def analyze_scene_from_memory(
     time_range_minutes: int = 30,
     limit: int = 10
 ) -> str:
-    """Analyze scene based on stored memory data
-    
+    """Analyze scene based on stored memory data (HTTP mode only)
+
+    Note: This tool requires AI service for analysis.
+    For MCP mode, use capture_screen_image and ask your client to analyze.
+
     Args:
         query: What to analyze or look for in the stored scenes
         stream_id: Specific stream to analyze (optional)
         time_range_minutes: Time range to search in minutes (default: 30)
         limit: Maximum number of results to analyze (default: 10)
-    
+
     Returns:
         Scene analysis based on memory data
     """
     try:
+        if not AI_SERVICE_AVAILABLE or ai_service is None:
+            return "AI service not available. This tool requires AI service (HTTP mode only)."
+
         result = await ai_service.analyze_scene_from_memory(
             query=query,
             stream_id=stream_id,
@@ -296,18 +331,24 @@ async def query_memory(
     time_range_minutes: int = 60,
     limit: int = 20
 ) -> str:
-    """Query the memory system for stored analysis data
-    
+    """Query the memory system for stored analysis data (HTTP mode only)
+
+    Note: This tool requires AI service for querying.
+    For MCP mode, memory operations should be done client-side.
+
     Args:
         query: Search query for memory entries
         stream_id: Filter by specific stream ID (optional)
         time_range_minutes: Time range to search in minutes (default: 60)
         limit: Maximum number of results (default: 20)
-    
+
     Returns:
         Memory query results
     """
     try:
+        if not AI_SERVICE_AVAILABLE or ai_service is None:
+            return "AI service not available. This tool requires AI service (HTTP mode only)."
+
         result = await ai_service.query_memory_direct(
             query=query,
             stream_id=stream_id,
@@ -322,12 +363,17 @@ async def query_memory(
 @mcp.tool()
 async def get_memory_statistics() -> str:
     """Get memory system statistics and health information
-    
+
     Returns:
         Memory system statistics
     """
     try:
-        stats = await ai_service.get_memory_statistics()
+        from .memory_system import memory_system
+        stats = await memory_system.get_statistics()
+        return f"Memory statistics: {stats}"
+    except ImportError:
+        from core.memory_system import memory_system
+        stats = await memory_system.get_statistics()
         return f"Memory statistics: {stats}"
     except Exception as e:
         logger.error(f"Failed to get memory statistics: {e}")
@@ -547,18 +593,18 @@ async def get_database_pool_stats() -> str:
 @mcp.tool()
 async def database_pool_health_check() -> str:
     """Perform database pool health check
-    
+
     Returns:
         Database pool health status
     """
     try:
         from .memory_system import memory_system
-        
+
         if not memory_system._db_pool:
             return "Database pool not initialized"
-        
+
         health = await memory_system._db_pool.health_check()
-        
+
         if health["healthy"]:
             response_lines = [
                 "Database Pool Health: HEALTHY ✓",
@@ -573,10 +619,75 @@ async def database_pool_health_check() -> str:
                 "Database Pool Health: UNHEALTHY ✗",
                 f"- Error: {health.get('error', 'Unknown error')}"
             ]
-        
+
         return "\n".join(response_lines)
     except Exception as e:
         logger.error(f"Failed to perform database health check: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+def get_capture_backend_info() -> str:
+    """Get screen capture backend information and optimization status
+
+    Returns detailed information about:
+    - Active capture backend (MSS, DXGI, WGC)
+    - Windows optimization availability and status
+    - Platform-specific recommendations
+    - Performance statistics for different backends
+
+    This is useful for understanding:
+    - Whether Windows GPU-accelerated capture is being used
+    - Installation requirements for optimizations
+    - Expected performance improvements
+
+    Returns:
+        Capture backend information and recommendations
+    """
+    try:
+        backend_info = screen_capture.get_backend_info()
+        perf_stats = screen_capture.get_performance_stats()
+
+        response_lines = [
+            "Screen Capture Backend Information:",
+            f"- Platform: {backend_info['platform']}",
+            f"- Active Backend: {backend_info['active_backend']}",
+            f"- Windows Optimization Available: {backend_info['windows_optimization_available']}",
+            f"- Windows Optimization Active: {backend_info['windows_optimization_active']}",
+            "",
+            "Performance Statistics:",
+            f"- Total Captures: {perf_stats['total_captures']}",
+            f"- Cache Hit Rate: {perf_stats['cache_hit_rate_percent']}%",
+            f"- Average Capture Time: {perf_stats['avg_capture_time_ms']:.2f}ms",
+            f"- Windows Optimized Captures: {perf_stats['windows_opt_captures']} ({perf_stats['windows_opt_usage_percent']}%)",
+            f"- MSS Captures: {perf_stats['mss_captures']} ({perf_stats['mss_usage_percent']}%)",
+        ]
+
+        # Add backend details if available
+        if backend_info.get('backend_details'):
+            details = backend_info['backend_details']
+            response_lines.append("")
+            response_lines.append("Backend Details:")
+            response_lines.append(f"- Available Backends: {', '.join(details.get('available_backends', []))}")
+            if details.get('backend_details'):
+                for name, info in details['backend_details'].items():
+                    response_lines.append(f"  - {name}: {info.get('backend', 'N/A')} (initialized: {info.get('initialized', False)})")
+
+        # Add recommendations
+        recommendations = backend_info.get('recommendations', {})
+        if recommendations:
+            response_lines.append("")
+            response_lines.append("Recommendations:")
+            response_lines.append(f"- {recommendations.get('message', 'No recommendations')}")
+            if 'wgc_install' in recommendations:
+                response_lines.append(f"- For WGC: {recommendations['wgc_install']}")
+            if 'dxgi_install' in recommendations:
+                response_lines.append(f"- For DXGI: {recommendations['dxgi_install']}")
+            if 'benefits' in recommendations:
+                response_lines.append(f"- Benefits: {recommendations['benefits']}")
+
+        return "\n".join(response_lines)
+    except Exception as e:
+        logger.error(f"Failed to get capture backend info: {e}")
         return f"Error: {str(e)}"
 
 # Additional deprecated AI tools removed (v2.1+)
