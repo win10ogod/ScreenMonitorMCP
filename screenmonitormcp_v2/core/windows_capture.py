@@ -294,23 +294,30 @@ class WGCCaptureBackend(WindowsCaptureBackend):
                     from winsdk.windows.graphics.capture.interop import create_for_monitor
                     self._wgc_available = True
                     logger.info("Windows Graphics Capture available (via winsdk)")
-                except ImportError:
+                except ImportError as e:
+                    # winsdk not available or has missing dependencies
+                    logger.debug(f"WGC winsdk import failed: {e}")
                     # Fallback to try winrt
                     try:
                         from winrt.windows.graphics.capture import Direct3D11CaptureFramePool
                         self._wgc_available = True
                         logger.info("Windows Graphics Capture available (via winrt)")
                     except ImportError:
-                        logger.info("WGC unavailable: Install with 'pip install winsdk' or 'pip install winrt-Windows.Graphics.Capture'")
+                        logger.debug("WGC unavailable: Install with 'pip install winsdk' or 'pip install winrt-Windows.Graphics.Capture'")
+                except Exception as e:
+                    # Catch any other errors during import (like System.Runtime.WindowsRuntime missing)
+                    logger.debug(f"WGC check failed: {e}")
+                    self._wgc_available = False
             else:
-                logger.info(f"WGC unavailable: Windows build {sys.getwindowsversion().build} < 17134 (need 1803+)")
-        except (ImportError, AttributeError) as e:
-            logger.info("WGC unavailable: Install with 'pip install winsdk'")
-            logger.debug(f"WGC check error: {e}")
+                logger.debug(f"WGC unavailable: Windows build {sys.getwindowsversion().build} < 17134 (need 1803+)")
+        except (ImportError, AttributeError, Exception) as e:
+            logger.debug(f"WGC availability check failed: {e}")
+            self._wgc_available = False
 
     def initialize(self) -> bool:
         """Initialize WGC capture using Windows Runtime APIs."""
         if not self._wgc_available:
+            logger.debug("WGC not available - skipping initialization")
             return False
 
         try:
@@ -318,7 +325,7 @@ class WGCCaptureBackend(WindowsCaptureBackend):
             self._direct3d_device = self._create_direct3d_device()
 
             if self._direct3d_device is None:
-                logger.error("Failed to create Direct3D device for WGC")
+                logger.debug("Failed to create Direct3D device for WGC - this is optional")
                 return False
 
             logger.info("WGC initialized successfully with Direct3D device")
@@ -326,8 +333,7 @@ class WGCCaptureBackend(WindowsCaptureBackend):
             return True
 
         except Exception as e:
-            logger.error(f"WGC initialization failed: {e}")
-            logger.info("WGC requires winsdk and Windows 10 1803+ - falling back to MSS")
+            logger.debug(f"WGC initialization failed (optional feature): {e}")
             return False
 
     def _create_direct3d_device(self):
@@ -373,18 +379,23 @@ class WGCCaptureBackend(WindowsCaptureBackend):
                     # This is a simplified version - full implementation would properly wrap the device
                     return device
                 else:
-                    logger.error(f"D3D11CreateDevice failed with HRESULT: {hr}")
+                    logger.debug(f"D3D11CreateDevice failed with HRESULT: {hr}")
                     return None
 
-            except ImportError:
+            except (ImportError, Exception) as e:
+                # winsdk not available or import failed
+                logger.debug(f"winsdk D3D device creation failed: {e}")
                 # Try winrt fallback
-                from winrt.windows.graphics.directx.direct3d11 import IDirect3DDevice
-                # Similar implementation for winrt
-                logger.warning("Using winrt package - winsdk recommended for better compatibility")
-                return None
+                try:
+                    from winrt.windows.graphics.directx.direct3d11 import IDirect3DDevice
+                    # Similar implementation for winrt
+                    logger.debug("Using winrt package - winsdk recommended for better compatibility")
+                    return None
+                except (ImportError, Exception):
+                    return None
 
         except Exception as e:
-            logger.error(f"Failed to create Direct3D device: {e}")
+            logger.debug(f"Failed to create Direct3D device (optional feature): {e}")
             return None
 
     def capture(self, monitor: int = 0) -> Optional[Image.Image]:
@@ -519,11 +530,11 @@ class WGCCaptureBackend(WindowsCaptureBackend):
                 return image
 
             except ImportError:
-                logger.error("winsdk package not available - WGC capture requires winsdk")
+                logger.debug("winsdk package not available - WGC capture requires winsdk")
                 return None
 
         except Exception as e:
-            logger.error(f"WGC async capture failed: {e}")
+            logger.debug(f"WGC async capture failed (optional feature): {e}")
             import traceback
             logger.debug(f"WGC capture traceback: {traceback.format_exc()}")
             return None

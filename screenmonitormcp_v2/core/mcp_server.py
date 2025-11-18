@@ -23,6 +23,14 @@ from datetime import datetime
 # Official MCP Python SDK FastMCP imports
 from mcp.server.fastmcp import FastMCP
 
+# Configure logger to use stderr for MCP mode - MUST BE EARLY
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
+    logger.addHandler(handler)
+    logger.setLevel(logging.ERROR)  # Only show errors in MCP mode
+
 try:
     from .screen_capture import ScreenCapture
     from .streaming import stream_manager
@@ -55,14 +63,6 @@ try:
         logger.info("AI service loaded but not configured (MCP-only mode)")
 except ImportError:
     logger.info("AI service not loaded - MCP-only mode (recommended)")
-
-# Configure logger to use stderr for MCP mode
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
-    logger.addHandler(handler)
-    logger.setLevel(logging.ERROR)  # Only show errors in MCP mode
 
 # Initialize FastMCP server
 mcp = FastMCP("screenmonitormcp-v2")
