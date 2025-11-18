@@ -7,18 +7,17 @@ name = "screenmonitormcp-v2"
 version = "2.5.0"
 description = "A revolutionary Model Context Protocol (MCP) server that gives AI real-time vision capabilities - now with MCP-only mode (no external dependencies required)"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Monitoring",
     "Topic :: Multimedia :: Graphics :: Capture :: Screen Capture",
@@ -47,11 +46,29 @@ http = [
     "uvicorn[standard]>=0.24.0",
     "openai>=1.3.0",
 ]
-# All features (HTTP + AI)
+# Windows GPU-accelerated screen capture optimization
+windows-perf = [
+    "dxcam>=0.0.5",      # DXGI Desktop Duplication (1-5ms capture)
+    "numpy>=1.21.0",     # Required by dxcam
+]
+# Windows Graphics Capture framework (advanced)
+windows-wgc = [
+    "pythonnet>=3.0.0",  # Windows Graphics Capture API access
+]
+# All Windows optimizations
+windows-all = [
+    "dxcam>=0.0.5",
+    "numpy>=1.21.0",
+    "pythonnet>=3.0.0",
+]
+# All features (HTTP + AI + Windows optimization)
 all = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "openai>=1.3.0",
+    "dxcam>=0.0.5",
+    "numpy>=1.21.0",
+    "pythonnet>=3.0.0",
 ]
 # Development tools
 dev = [
