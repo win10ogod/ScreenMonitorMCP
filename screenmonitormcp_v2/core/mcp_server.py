@@ -176,7 +176,7 @@ screen_capture = ScreenCapture()
 from collections import OrderedDict
 import hashlib
 _image_cache = OrderedDict()  # {resource_uri: (image_data, mime_type, metadata)}
-_MAX_CACHE_SIZE = 10  # Keep last 10 captures
+_MAX_CACHE_SIZE = 120  # Keep last 120 captures (2 seconds @ 60 FPS)
 
 def _add_to_cache(image_data: str, mime_type: str, metadata: dict) -> str:
     """Add image to cache and return resource URI."""
@@ -843,6 +843,224 @@ def get_capture_backend_info() -> str:
         return "\n".join(response_lines)
     except Exception as e:
         logger.error(f"Failed to get capture backend info: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def enable_gaming_mode(
+    mode: str = "performance",
+    fps: Optional[int] = None,
+    quality: Optional[int] = None,
+    enable_frame_skip: bool = True
+) -> str:
+    """Enable gaming mode optimizations for high-performance screen streaming
+
+    Gaming mode provides specialized configurations optimized for real-time
+    game streaming with high FPS (30-120) and low latency.
+
+    Available modes:
+    - "quality": 10 FPS, 95% quality, PNG format (screenshots)
+    - "balanced": 30 FPS, 75% quality, JPEG format (casual gaming)
+    - "performance": 60 FPS, 50% quality, JPEG format (competitive gaming)
+    - "extreme": 120 FPS, 30% quality, JPEG format (esports/high-end hardware)
+
+    Args:
+        mode: Performance mode preset ("quality", "balanced", "performance", "extreme")
+        fps: Override FPS setting (default: mode preset)
+        quality: Override quality setting 1-100 (default: mode preset)
+        enable_frame_skip: Enable frame skipping to maintain stable FPS (default: True)
+
+    Returns:
+        Configuration status and performance expectations
+
+    Example:
+        enable_gaming_mode(mode="performance", fps=60, quality=50)
+    """
+    try:
+        from .gaming_mode import PerformanceMode, GameStreamConfig
+
+        # Validate mode
+        try:
+            perf_mode = PerformanceMode(mode.lower())
+        except ValueError:
+            return f"Error: Invalid mode '{mode}'. Must be one of: quality, balanced, performance, extreme"
+
+        # Create configuration
+        game_config = GameStreamConfig(mode=perf_mode)
+
+        # Apply overrides
+        if fps is not None:
+            if fps < 1 or fps > 120:
+                return "Error: FPS must be between 1 and 120"
+            game_config.fps = fps
+
+        if quality is not None:
+            if quality < 1 or quality > 100:
+                return "Error: Quality must be between 1 and 100"
+            game_config.quality = quality
+
+        game_config.enable_frame_skip = enable_frame_skip
+
+        # Store configuration in server config
+        config.enable_gaming_mode = True
+        config.gaming_max_fps = game_config.fps
+        config.gaming_quality = game_config.quality
+        config.gaming_enable_frame_skip = game_config.enable_frame_skip
+
+        response_lines = [
+            "Gaming Mode Enabled ✓",
+            "",
+            "Configuration:",
+            f"- Mode: {perf_mode.value.upper()}",
+            f"- Target FPS: {game_config.fps}",
+            f"- Image Quality: {game_config.quality}%",
+            f"- Image Format: {game_config.format.upper()}",
+            f"- Frame Skipping: {'Enabled' if game_config.enable_frame_skip else 'Disabled'}",
+            f"- Adaptive Quality: {'Enabled' if game_config.adaptive_quality else 'Disabled'}",
+            f"- Cache Size: {game_config.cache_size} frames",
+            "",
+            "Expected Performance:",
+        ]
+
+        # Add performance expectations
+        if game_config.fps <= 10:
+            response_lines.append("- Latency: 15-25ms/frame")
+            response_lines.append("- Best for: Screenshots, documentation")
+        elif game_config.fps <= 30:
+            response_lines.append("- Latency: 8-12ms/frame")
+            response_lines.append("- Best for: Casual gaming, monitoring")
+        elif game_config.fps <= 60:
+            response_lines.append("- Latency: 5-8ms/frame")
+            response_lines.append("- Best for: Competitive gaming, fast action")
+        else:
+            response_lines.append("- Latency: 3-5ms/frame")
+            response_lines.append("- Best for: Esports, high-end hardware")
+            response_lines.append("- Requires: GPU-accelerated capture (DXGI/WGC on Windows)")
+
+        response_lines.extend([
+            "",
+            "Next Steps:",
+            "1. Use create_stream() to start a gaming stream",
+            "2. Monitor performance with get_gaming_metrics()",
+            "3. For lowest latency, use /mcp/game-stream WebSocket endpoint"
+        ])
+
+        return "\n".join(response_lines)
+
+    except Exception as e:
+        logger.error(f"Failed to enable gaming mode: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
+async def get_gaming_metrics() -> str:
+    """Get current gaming mode performance metrics
+
+    Returns real-time performance statistics for active gaming streams:
+    - Current and average FPS
+    - Frame timing breakdown (capture, encode, network)
+    - Dropped and skipped frame rates
+    - Latency percentiles (p50, p95, p99)
+    - Session duration and total frames
+
+    This is useful for:
+    - Monitoring gaming stream performance
+    - Identifying bottlenecks
+    - Optimizing configuration
+    - Troubleshooting latency issues
+
+    Returns:
+        Detailed performance metrics for all active gaming streams
+    """
+    try:
+        # Try to get metrics from SSE server
+        try:
+            from .mcp_sse_server import _stream_metrics
+
+            if not _stream_metrics:
+                return "No active gaming streams. Use create_stream() to start streaming."
+
+            response_lines = [
+                "Gaming Mode Performance Metrics",
+                "=" * 50,
+                ""
+            ]
+
+            for stream_id, metrics in _stream_metrics.items():
+                stats = metrics.get_stats()
+
+                if not stats.get("available"):
+                    continue
+
+                response_lines.extend([
+                    f"Stream: {stream_id}",
+                    "-" * 50,
+                    "",
+                    "Frame Rate:",
+                    f"  Current FPS: {stats['current_fps']:.1f}",
+                    f"  Average Session FPS: {stats['avg_session_fps']:.1f}",
+                    "",
+                    "Frame Timing (milliseconds):",
+                    f"  Average Total: {stats['avg_frame_time_ms']:.2f}ms",
+                    f"  P50 (Median): {stats['p50_frame_time_ms']:.2f}ms",
+                    f"  P95: {stats['p95_frame_time_ms']:.2f}ms",
+                    f"  P99: {stats['p99_frame_time_ms']:.2f}ms",
+                    f"  Min: {stats['min_frame_time_ms']:.2f}ms",
+                    f"  Max: {stats['max_frame_time_ms']:.2f}ms",
+                    "",
+                    "Timing Breakdown:",
+                    f"  Capture: {stats['avg_capture_ms']:.2f}ms",
+                    f"  Encode: {stats['avg_encode_ms']:.2f}ms",
+                    f"  Network: {stats['avg_network_ms']:.2f}ms",
+                    "",
+                    "Frame Statistics:",
+                    f"  Total Frames: {stats['total_frames']}",
+                    f"  Dropped Frames: {stats['dropped_frames']} ({stats['drop_rate_percent']:.1f}%)",
+                    f"  Skipped Frames: {stats['skipped_frames']} ({stats['skip_rate_percent']:.1f}%)",
+                    "",
+                    "Session Info:",
+                    f"  Duration: {stats['session_duration_seconds']:.1f}s",
+                    f"  Sample Window: {stats['sample_window_size']} frames",
+                    ""
+                ])
+
+                # Add performance assessment
+                fps = stats['current_fps']
+                drop_rate = stats['drop_rate_percent']
+
+                if fps >= 55 and drop_rate < 1:
+                    assessment = "✓ Excellent - Stable high FPS"
+                elif fps >= 45 and drop_rate < 5:
+                    assessment = "✓ Good - Acceptable for gaming"
+                elif fps >= 25 and drop_rate < 10:
+                    assessment = "⚠ Fair - Consider lowering quality"
+                else:
+                    assessment = "✗ Poor - Reduce FPS or quality settings"
+
+                response_lines.append(f"Performance: {assessment}")
+                response_lines.append("")
+
+            if config.enable_gaming_mode:
+                response_lines.extend([
+                    "",
+                    "Gaming Mode Status:",
+                    f"- Enabled: Yes",
+                    f"- Max FPS: {config.gaming_max_fps}",
+                    f"- Quality: {config.gaming_quality}%",
+                    f"- Frame Skip: {'Enabled' if config.gaming_enable_frame_skip else 'Disabled'}",
+                ])
+            else:
+                response_lines.extend([
+                    "",
+                    "Gaming Mode: Not enabled",
+                    "Use enable_gaming_mode() to optimize for gaming"
+                ])
+
+            return "\n".join(response_lines)
+
+        except ImportError:
+            return "Gaming metrics not available. SSE server module not found."
+
+    except Exception as e:
+        logger.error(f"Failed to get gaming metrics: {e}")
         return f"Error: {str(e)}"
 
 # Additional deprecated AI tools removed (v2.1+)
