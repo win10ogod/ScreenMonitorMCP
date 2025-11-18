@@ -46,24 +46,6 @@ except ImportError:
     from core.performance_monitor import performance_monitor
     from server.config import config
 
-# AI service is optional for MCP mode (only needed for HTTP server mode)
-AI_SERVICE_AVAILABLE = False
-ai_service = None
-try:
-    try:
-        from .ai_service import ai_service as _ai_service
-    except ImportError:
-        from core.ai_service import ai_service as _ai_service
-
-    ai_service = _ai_service
-    AI_SERVICE_AVAILABLE = ai_service.is_available() if ai_service else False
-    if AI_SERVICE_AVAILABLE:
-        logger.info("AI service initialized (optional, for HTTP mode)")
-    else:
-        logger.info("AI service loaded but not configured (MCP-only mode)")
-except ImportError:
-    logger.info("AI service not loaded - MCP-only mode (recommended)")
-
 # Initialize FastMCP server
 mcp = FastMCP("screenmonitormcp-v2")
 
@@ -172,157 +154,6 @@ async def capture_screen(
         return f"Error: {str(e)}"
 
 @mcp.tool()
-async def capture_screen_base64(
-    monitor: int = 0,
-    format: str = "jpeg",
-    quality: int = 50,
-    max_width: int = 1280
-) -> str:
-    """Capture screen and return base64 data (LEGACY, for compatibility)
-
-    WARNING: This returns large base64 data in the response.
-    For better performance, use capture_screen() which returns a resource URI instead.
-
-    This method includes automatic image compression to reduce size:
-    - Default format: JPEG (smaller than PNG)
-    - Default quality: 50 (good balance between size and quality)
-    - Default max_width: 1280 (scales down large screenshots)
-
-    Args:
-        monitor: Monitor number to capture (0 for primary)
-        format: Image format (png or jpeg, default: jpeg)
-        quality: Image quality for JPEG (1-100, default: 50)
-        max_width: Maximum width in pixels (scales down if larger, default: 1280)
-
-    Returns:
-        JSON string with compressed image base64 data and metadata
-    """
-    try:
-        capture_result = await screen_capture.capture_screen(monitor)
-        if not capture_result.get("success"):
-            return f"Error: Failed to capture screen - {capture_result.get('message', 'Unknown error')}"
-
-        import json
-        from PIL import Image
-        import io
-
-        # Decode and potentially resize image
-        image_data = capture_result["image_data"]
-        width = capture_result.get("width", 0)
-        height = capture_result.get("height", 0)
-
-        # If image is too large, resize it
-        if width > max_width:
-            # Decode base64 to PIL Image
-            img_bytes = base64.b64decode(image_data)
-            img = Image.open(io.BytesIO(img_bytes))
-
-            # Calculate new dimensions maintaining aspect ratio
-            ratio = max_width / width
-            new_height = int(height * ratio)
-
-            # Resize
-            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-
-            # Re-encode with specified format and quality
-            buffer = io.BytesIO()
-            if format.lower() == "jpeg":
-                img.convert("RGB").save(buffer, format="JPEG", quality=quality, optimize=True)
-            else:
-                img.save(buffer, format="PNG", optimize=True)
-
-            image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
-            width = max_width
-            height = new_height
-        elif format.lower() == "jpeg" and quality < 85:
-            # Re-compress even if size is OK, to reduce quality
-            img_bytes = base64.b64decode(image_data)
-            img = Image.open(io.BytesIO(img_bytes))
-
-            buffer = io.BytesIO()
-            img.convert("RGB").save(buffer, format="JPEG", quality=quality, optimize=True)
-            image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
-
-        result = {
-            "success": True,
-            "image_base64": image_data,
-            "format": format,
-            "monitor": monitor,
-            "metadata": {
-                "timestamp": datetime.now().isoformat(),
-                "width": width,
-                "height": height,
-                "quality": quality if format == "jpeg" else 100,
-                "compressed": True
-            }
-        }
-
-        return json.dumps(result, indent=2)
-    except Exception as e:
-        logger.error(f"Screen capture failed: {e}")
-        return f"Error: {str(e)}"
-
-# Legacy AI-dependent tools removed (v2.1+)
-# Use capture_screen_image() instead and let your MCP client analyze images
-
-@mcp.tool()
-async def list_ai_models() -> str:
-    """List available AI models from the configured provider (HTTP mode only)
-
-    Note: This tool is only available when AI service is configured.
-    MCP mode does not require AI service configuration.
-
-    Returns:
-        List of available models as text
-    """
-    try:
-        if not AI_SERVICE_AVAILABLE or ai_service is None:
-            return "AI service not available. This tool is for HTTP server mode only. MCP mode uses client-side analysis."
-
-        if not ai_service.is_available():
-            return "Error: AI service is not configured. Please set OPENAI_API_KEY."
-
-        result = await ai_service.list_models()
-
-        if result.get("success"):
-            models = result.get("models", [])
-            if models:
-                return f"Available models: {', '.join(models)}"
-            else:
-                return "No models available"
-        else:
-            return f"Error: {result.get('error', 'Unknown error occurred')}"
-    except Exception as e:
-        logger.error(f"Failed to list AI models: {e}")
-        return f"Error: {str(e)}"
-
-@mcp.tool()
-def get_ai_status() -> str:
-    """Get AI service configuration status (HTTP mode only)
-
-    Note: This tool is only relevant when AI service is configured.
-    MCP mode does not require AI service configuration.
-
-    Returns:
-        AI service status information
-    """
-    try:
-        if not AI_SERVICE_AVAILABLE or ai_service is None:
-            return "AI service not loaded (MCP-only mode). This is normal and recommended for MCP usage."
-
-        status = ai_service.get_status()
-        return f"AI Service Status: {status}"
-    except Exception as e:
-        logger.error(f"Failed to get AI status: {e}")
-        return f"Error: {str(e)}"
-
-# First analyze_scene_from_memory function removed (duplicate)
-
-# First query_memory function removed (duplicate)
-
-# First get_memory_statistics function removed (duplicate)
-
-@mcp.tool()
 def get_performance_metrics() -> str:
     """Get detailed performance metrics and system health
     
@@ -346,8 +177,6 @@ def get_system_status() -> str:
     try:
         status = {
             "timestamp": datetime.now().isoformat(),
-            "ai_service": ai_service.is_available() if AI_SERVICE_AVAILABLE and ai_service else False,
-            "ai_service_mode": "HTTP only" if AI_SERVICE_AVAILABLE else "Not loaded (MCP-only)",
             "screen_capture": screen_capture.is_available(),
             "performance_monitor": performance_monitor.is_running(),
             "stream_manager": stream_manager.is_running()
@@ -431,78 +260,6 @@ async def stop_stream(stream_id: str) -> str:
         return f"Error: {str(e)}"
 
 # Memory System Tools
-
-@mcp.tool()
-async def analyze_scene_from_memory(
-    query: str,
-    stream_id: Optional[str] = None,
-    time_range_minutes: int = 30,
-    limit: int = 10
-) -> str:
-    """Analyze scene based on stored memory data (HTTP mode only)
-
-    Note: This tool requires AI service for analysis.
-    For MCP mode, use capture_screen_image and ask your client to analyze.
-
-    Args:
-        query: What to analyze or look for in the stored scenes
-        stream_id: Specific stream to analyze (optional)
-        time_range_minutes: Time range to search in minutes (default: 30)
-        limit: Maximum number of results to analyze (default: 10)
-
-    Returns:
-        Scene analysis based on memory data
-    """
-    try:
-        if not AI_SERVICE_AVAILABLE or ai_service is None:
-            return "AI service not available. This tool requires AI service (HTTP mode only)."
-
-        result = await ai_service.analyze_scene_from_memory(
-            query=query,
-            stream_id=stream_id,
-            time_range_minutes=time_range_minutes,
-            limit=limit
-        )
-        return f"Scene analysis: {result}"
-    except Exception as e:
-        logger.error(f"Failed to analyze scene from memory: {e}")
-        return f"Error: {str(e)}"
-
-@mcp.tool()
-async def query_memory(
-    query: str,
-    stream_id: Optional[str] = None,
-    time_range_minutes: int = 60,
-    limit: int = 20
-) -> str:
-    """Query the memory system for stored analysis data (HTTP mode only)
-
-    Note: This tool requires AI service for querying.
-    For MCP mode, memory operations should be done client-side.
-
-    Args:
-        query: Search query for memory entries
-        stream_id: Filter by specific stream ID (optional)
-        time_range_minutes: Time range to search in minutes (default: 60)
-        limit: Maximum number of results (default: 20)
-
-    Returns:
-        Memory query results
-    """
-    try:
-        if not AI_SERVICE_AVAILABLE or ai_service is None:
-            return "AI service not available. This tool requires AI service (HTTP mode only)."
-
-        result = await ai_service.query_memory_direct(
-            query=query,
-            stream_id=stream_id,
-            time_range_minutes=time_range_minutes,
-            limit=limit
-        )
-        return f"Memory query results: {result}"
-    except Exception as e:
-        logger.error(f"Failed to query memory: {e}")
-        return f"Error: {str(e)}"
 
 @mcp.tool()
 async def get_memory_statistics() -> str:

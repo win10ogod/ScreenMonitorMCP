@@ -189,30 +189,87 @@ print(f"Average capture time: {stats['avg_capture_time_ms']}ms")
 
 ### ✨ New Features
 
-**MCP Resources API for Efficient Image Handling:**
-- 🎯 **`capture_screen`** (NEW - RECOMMENDED): Returns MCP Resource URI instead of base64 data
-  - Response size reduced by 95%+ (from 5-8 MB to ~200 bytes)
+**MCP Resources API - The ONLY Way to Capture Screens:**
+- 🎯 **`capture_screen`**: Returns MCP Resource URI instead of base64 data
+  - Response size: ~200 bytes (vs 5-8 MB with base64)
   - Client fetches image via MCP Resources API automatically
   - Resource pattern: `screen://capture/{id}`
   - Cache maintains last 10 captures for resource requests
   - Better MCP protocol compliance and cleaner architecture
-- 🎯 **`capture_screen_base64`** (LEGACY): Returns compressed base64 for compatibility
-  - Auto-compression: JPEG quality 50, max 1280px width by default
-  - Size reduction: 5-8 MB → 100-300 KB (configurable)
-  - Good fallback for clients without resource support
-  - Customizable quality and size limits
 - 🎯 **Resource Handler**: `@mcp.resource` decorator for image serving
   - Automatic cache management (LRU, max 10 items)
   - Proper MIME type handling
   - Clean separation of capture metadata and image data
 
 **Benefits:**
-- ⚡ Dramatically faster tool responses (no large data transfer)
+- ⚡ **Eliminates token explosion** - no large data in tool responses
 - 🎯 Better memory efficiency (lazy loading)
 - 🔧 Cleaner protocol usage (resources for binary data)
-- 🔄 Backward compatible (base64 option still available)
+- 🎨 Simpler API - only one way to capture screens
 
-**Addresses user feedback:** "image_base64太長了" (base64 data too long)
+**Addresses user feedback:**
+- "image_base64太長了" (base64 data too long)
+- "然後刪除base64, 還是tokens爆炸" (still token explosion with base64)
+
+### 🔥 BREAKING CHANGES
+
+**1. Removed `capture_screen_base64` Tool:**
+
+**User Feedback:** "然後刪除base64, 還是tokens爆炸" (Delete base64, still causes token explosion)
+
+**What Was Removed:**
+- ❌ `capture_screen_base64()` tool - Even with compression, still caused token explosion
+
+**Why Removed:**
+- Even with aggressive compression (JPEG quality 50, max 1280px width), responses were still 100-300 KB
+- This still caused token explosion in MCP clients
+- `capture_screen` with resource URI is the superior solution (~200 bytes)
+- Simpler API - only one way to do things
+
+**Migration:**
+- Old: `capture_screen_base64(monitor=0, quality=50)`
+- New: `capture_screen(monitor=0)` - Returns resource URI, client fetches image automatically
+
+**2. Complete Removal of External AI Dependencies from MCP Mode:**
+
+**User Feedback:** "這是你的問題, 你根本沒有重構, 應該完全刪除掉外部ai" (You didn't actually refactor, you should completely remove external AI)
+
+**What Was Removed:**
+- ❌ `list_ai_models()` tool - HTTP mode only, not needed in MCP
+- ❌ `get_ai_status()` tool - HTTP mode only, not needed in MCP
+- ❌ `analyze_scene_from_memory()` tool - required external AI service
+- ❌ `query_memory()` tool - required external AI service
+- ❌ AI service import and initialization code
+- ❌ All AI_SERVICE_AVAILABLE checks and references
+
+**Why This Is Correct:**
+- ✅ **MCP clients have built-in vision** - Claude Desktop, etc. analyze images themselves
+- ✅ **No external API needed** - No OPENAI_API_KEY configuration required
+- ✅ **No confusing errors** - Users won't see "Incorrect API key" errors in MCP mode
+- ✅ **Simpler architecture** - Clear separation: MCP captures, client analyzes
+- ✅ **True MCP protocol compliance** - Resources for data, client does processing
+
+**Remaining Tools (All Work Without External AI):**
+- ✅ `capture_screen` - Returns resource URI for client-side analysis
+- ✅ `capture_screen_base64` - Returns compressed base64 (fallback)
+- ✅ `get_capture_backend_info` - Backend status information
+- ✅ `get_system_status` - System health (AI references removed)
+- ✅ `get_performance_metrics` - Performance statistics
+- ✅ Streaming tools: `create_stream`, `list_streams`, `stop_stream`, `get_stream_info`
+- ✅ Memory tools: `get_memory_statistics`, `get_memory_usage`, etc.
+- ✅ Database tools: `get_database_pool_stats`, `database_pool_health_check`
+
+**Migration:**
+- Old: Tools returned AI analysis results
+- New: Tools return images, MCP client analyzes them
+- No configuration needed - it just works!
+
+**For HTTP Server Mode:**
+- AI service still available for HTTP/REST API users
+- External AI API configuration only needed for HTTP mode
+- MCP mode is completely independent
+
+This is the **correct MCP architecture**: Capture → Return → Client Analyzes
 
 ### 🐛 Bug Fixes
 
