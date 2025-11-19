@@ -40,7 +40,29 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
         request_id = request_data.get("id")
 
         # Handle MCP protocol methods
-        if method == "tools/list":
+        if method == "initialize":
+            # MCP initialization handshake
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "serverInfo": {
+                        "name": "screenmonitormcp-v2",
+                        "version": "2.5.0"
+                    },
+                    "capabilities": {
+                        "tools": {},
+                        "resources": {
+                            "subscribe": True,
+                            "listChanged": True
+                        },
+                        "prompts": {}
+                    }
+                }
+            }
+
+        elif method == "tools/list":
             # Return list of available tools
             tools = []
             for tool_name, tool_func in mcp._tool_manager.list_tools().items():
@@ -222,16 +244,28 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
                     }
                 }
 
+        elif method and method.startswith("notifications/"):
+            # Handle notifications (no response expected)
+            # Notifications include: notifications/initialized, notifications/cancelled, etc.
+            logger.info(f"Received notification: {method}")
+            # Notifications don't require a response, but we return None to indicate success
+            return None
+
         else:
-            # Unknown method
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "error": {
-                    "code": -32601,
-                    "message": f"Method not found: {method}"
+            # Unknown method - only return error if this is a request (has id)
+            if request_id is not None:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {
+                        "code": -32601,
+                        "message": f"Method not found: {method}"
+                    }
                 }
-            }
+            else:
+                # Notification with unknown method - log and ignore
+                logger.warning(f"Unknown notification received: {method}")
+                return None
 
     except Exception as e:
         logger.error(f"MCP request processing failed: {e}", exc_info=True)
@@ -332,13 +366,18 @@ async def mcp_sse_endpoint_post(request: Request):
     where POST /sse is used for client-to-server messages.
 
     Returns:
-        JSON response with MCP result or error
+        JSON response with MCP result or error, or empty 204 for notifications
     """
     try:
         request_data = await request.json()
 
         # Process MCP request
         response = await _process_mcp_request(request_data)
+
+        # If response is None (notification), return 204 No Content
+        if response is None:
+            from fastapi.responses import Response
+            return Response(status_code=204)
 
         return response
 
