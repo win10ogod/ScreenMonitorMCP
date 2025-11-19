@@ -226,21 +226,23 @@ async def get_screen_capture(capture_id: str) -> bytes:
 async def capture_screen(
     monitor: int = 0,
     format: str = "png",
-    quality: int = 85
+    quality: int = 85,
+    include_image: bool = True
 ) -> str:
-    """Capture screen and return resource URI (NOT base64 data)
+    """Capture screen and return with embedded image data
 
-    This is the RECOMMENDED approach - returns a resource URI that can be
-    used to fetch the actual image data. This avoids sending large base64
-    data in the tool response.
+    This tool captures the screen and returns the image data directly embedded
+    in the response, allowing MCP clients to display it immediately.
 
     Args:
         monitor: Monitor number to capture (0 for primary)
         format: Image format (png or jpeg)
         quality: Image quality for JPEG (1-100)
+        include_image: Include base64 image data in response (default: True)
 
     Returns:
-        JSON with resource URI and metadata (without embedded image data)
+        Response with image data and metadata. The image is embedded as base64
+        data with a data URL format that MCP clients can display directly.
     """
     try:
         capture_result = await screen_capture.capture_screen(monitor)
@@ -260,23 +262,46 @@ async def capture_screen(
         # Determine MIME type
         mime_type = f"image/{format}"
 
-        # Add to cache and get resource URI
+        # Add to cache and get resource URI for future reference
         resource_uri = _add_to_cache(
             capture_result["image_data"],
             mime_type,
             metadata
         )
 
-        import json
-        result = {
-            "success": True,
-            "resource_uri": resource_uri,
-            "mime_type": mime_type,
-            "metadata": metadata,
-            "note": "Use the resource_uri to fetch the actual image data via MCP resources"
-        }
+        # Create data URL format for image (this is widely supported by MCP clients)
+        image_data_b64 = capture_result["image_data"]
+        data_url = f"data:{mime_type};base64,{image_data_b64}"
 
-        return json.dumps(result, indent=2)
+        import json
+        if include_image:
+            # Return with embedded image data
+            result = f"""✅ Screen captured successfully!
+
+**Metadata:**
+- Monitor: {monitor}
+- Format: {format}
+- Size: {metadata['width']}x{metadata['height']}
+- Timestamp: {metadata['timestamp']}
+- Resource URI: `{resource_uri}`
+
+**Image:**
+![Screenshot]({data_url})
+
+The screenshot is embedded above. The image can also be accessed later via the resource URI: `{resource_uri}`
+"""
+        else:
+            # Return resource URI only (legacy mode)
+            result = {
+                "success": True,
+                "resource_uri": resource_uri,
+                "mime_type": mime_type,
+                "metadata": metadata,
+                "note": "Use the resource_uri to fetch the actual image data via MCP resources"
+            }
+            return json.dumps(result, indent=2)
+
+        return result
     except Exception as e:
         logger.error(f"Screen capture failed: {e}")
         return f"Error: {str(e)}"
@@ -456,17 +481,18 @@ async def stop_auto_push_stream_tool(stream_id: str) -> str:
         return f"Error: {str(e)}"
 
 @mcp.tool()
-async def capture_stream_frame(stream_id: str) -> str:
-    """Capture current frame from an active stream and return resource URI
+async def capture_stream_frame(stream_id: str, include_image: bool = True) -> str:
+    """Capture current frame from an active stream with embedded image data
 
     This allows using streams in MCP mode by capturing individual frames
-    as resources. The client will automatically fetch and display the image.
+    and returning them with embedded image data for immediate display.
 
     Args:
         stream_id: Stream ID to capture from
+        include_image: Include base64 image data in response (default: True)
 
     Returns:
-        JSON with resource URI and metadata
+        Response with image data and metadata
     """
     try:
         # Get stream info to check if it exists
@@ -503,16 +529,39 @@ async def capture_stream_frame(stream_id: str) -> str:
             metadata
         )
 
-        import json
-        result = {
-            "success": True,
-            "resource_uri": resource_uri,
-            "mime_type": mime_type,
-            "metadata": metadata,
-            "note": "Use the resource_uri to fetch the actual image data via MCP resources"
-        }
+        # Create data URL format for image
+        image_data_b64 = capture_result["image_data"]
+        data_url = f"data:{mime_type};base64,{image_data_b64}"
 
-        return json.dumps(result, indent=2)
+        import json
+        if include_image:
+            # Return with embedded image data
+            result = f"""📸 Stream frame captured!
+
+**Stream Info:**
+- Stream ID: `{stream_id}`
+- Monitor: {monitor}
+- Format: {metadata['format']}
+- Size: {metadata['width']}x{metadata['height']}
+- Timestamp: {metadata['timestamp']}
+
+**Image:**
+![Stream Frame]({data_url})
+
+The frame is embedded above. Resource URI: `{resource_uri}`
+"""
+        else:
+            # Return resource URI only (legacy mode)
+            result = {
+                "success": True,
+                "resource_uri": resource_uri,
+                "mime_type": mime_type,
+                "metadata": metadata,
+                "note": "Use the resource_uri to fetch the actual image data via MCP resources"
+            }
+            return json.dumps(result, indent=2)
+
+        return result
     except Exception as e:
         logger.error(f"Failed to capture stream frame: {e}")
         return f"Error: {str(e)}"
