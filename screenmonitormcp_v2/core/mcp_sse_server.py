@@ -246,8 +246,8 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @sse_router.get("/sse")
-async def mcp_sse_endpoint(request: Request):
-    """SSE endpoint for MCP over HTTP.
+async def mcp_sse_endpoint_get(request: Request):
+    """SSE endpoint for MCP over HTTP (GET for event stream).
 
     This endpoint provides Server-Sent Events for MCP protocol,
     allowing clients to connect over HTTP instead of stdio.
@@ -321,6 +321,37 @@ async def mcp_sse_endpoint(request: Request):
             logger.info(f"SSE connection closed: {connection_id}")
 
     return EventSourceResponse(event_generator())
+
+
+@sse_router.post("/sse")
+async def mcp_sse_endpoint_post(request: Request):
+    """SSE endpoint for MCP over HTTP (POST for sending messages).
+
+    This endpoint receives MCP JSON-RPC requests from clients
+    and returns responses. This is the standard MCP SSE pattern
+    where POST /sse is used for client-to-server messages.
+
+    Returns:
+        JSON response with MCP result or error
+    """
+    try:
+        request_data = await request.json()
+
+        # Process MCP request
+        response = await _process_mcp_request(request_data)
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Message processing failed: {e}", exc_info=True)
+        return {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32700,
+                "message": f"Parse error: {str(e)}"
+            }
+        }
 
 
 @sse_router.post("/messages")
