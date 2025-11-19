@@ -539,15 +539,29 @@ async def get_memory_statistics() -> str:
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def get_stream_memory_stats() -> str:
+def get_stream_memory_stats(stream_id: str = None) -> str:
     """Get memory system statistics for streaming
-    
+
+    Args:
+        stream_id: Optional stream ID to get stats for a specific stream.
+                   If not provided, returns stats for all streams.
+
     Returns:
         Streaming memory statistics
     """
     try:
-        stats = stream_manager.get_memory_stats()
-        return f"Stream memory statistics: {stats}"
+        all_stats = stream_manager.get_memory_stats()
+
+        # If stream_id is provided, return stats for that specific stream
+        if stream_id:
+            if stream_id in all_stats.get("streams", {}):
+                stream_stats = all_stats["streams"][stream_id]
+                return f"Memory stats for stream {stream_id}: {stream_stats}"
+            else:
+                return f"Error: Stream {stream_id} not found"
+
+        # Otherwise return all stats
+        return f"Stream memory statistics: {all_stats}"
     except Exception as e:
         logger.error(f"Failed to get stream memory stats: {e}")
         return f"Error: {str(e)}"
