@@ -159,12 +159,27 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
             uri = params.get("uri")
 
             # Use the resource handler from mcp_server
-            from .mcp_server import get_screen_capture
+            from .mcp_server import get_screen_capture, _image_cache
 
             # Extract capture_id from URI
             if uri and uri.startswith("screen://capture/"):
                 capture_id = uri.replace("screen://capture/", "")
                 try:
+                    # Get the cached entry to retrieve the correct mime_type
+                    if uri not in _image_cache:
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "error": {
+                                "code": -32000,
+                                "message": f"Resource not found: {uri}"
+                            }
+                        }
+
+                    # Get mime_type from cache
+                    _, mime_type, metadata = _image_cache[uri]
+
+                    # Get the image bytes
                     image_bytes = await get_screen_capture(capture_id)
 
                     import base64
@@ -177,13 +192,14 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
                             "contents": [
                                 {
                                     "uri": uri,
-                                    "mimeType": "image/png",
+                                    "mimeType": mime_type,  # Use correct mime_type from cache
                                     "blob": image_base64
                                 }
                             ]
                         }
                     }
                 except Exception as e:
+                    logger.error(f"Resource read failed: {e}", exc_info=True)
                     return {
                         "jsonrpc": "2.0",
                         "id": request_id,
