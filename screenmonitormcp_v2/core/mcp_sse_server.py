@@ -64,14 +64,16 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
 
         elif method == "tools/list":
             # Return list of available tools
+            # list_tools() returns a list[Tool], not a dict
+            tool_list = mcp._tool_manager.list_tools()
             tools = []
-            for tool_name, tool_func in mcp._tool_manager.list_tools().items():
+            for tool in tool_list:
                 tools.append({
-                    "name": tool_name,
-                    "description": tool_func.__doc__ or "",
-                    "inputSchema": {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "inputSchema": tool.parameters if hasattr(tool, 'parameters') else {
                         "type": "object",
-                        "properties": {},  # FastMCP handles this
+                        "properties": {}
                     }
                 })
 
@@ -87,8 +89,15 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
             tool_params = params.get("arguments", {})
 
             # Get tool function from FastMCP
-            tools = mcp._tool_manager.list_tools()
-            if tool_name not in tools:
+            # list_tools() returns a list[Tool], need to find by name
+            tool_list = mcp._tool_manager.list_tools()
+            tool_func = None
+            for tool in tool_list:
+                if tool.name == tool_name:
+                    tool_func = tool.fn
+                    break
+
+            if tool_func is None:
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
@@ -99,7 +108,6 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
                 }
 
             # Call the tool
-            tool_func = tools[tool_name]
             try:
                 if asyncio.iscoroutinefunction(tool_func):
                     result = await tool_func(**tool_params)
@@ -187,11 +195,13 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
 
         elif method == "prompts/list":
             # Return list of available prompts
+            # list_prompts() returns a list[Prompt], not a dict
+            prompt_list = mcp._prompt_manager.list_prompts()
             prompts = []
-            for prompt_name, prompt_func in mcp._prompt_manager.list_prompts().items():
+            for prompt in prompt_list:
                 prompts.append({
-                    "name": prompt_name,
-                    "description": prompt_func.__doc__ or "",
+                    "name": prompt.name,
+                    "description": prompt.description or "",
                 })
 
             return {
@@ -204,8 +214,15 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
             # Get a prompt
             prompt_name = params.get("name")
 
-            prompts = mcp._prompt_manager.list_prompts()
-            if prompt_name not in prompts:
+            # list_prompts() returns a list[Prompt], need to find by name
+            prompt_list = mcp._prompt_manager.list_prompts()
+            prompt_func = None
+            for prompt in prompt_list:
+                if prompt.name == prompt_name:
+                    prompt_func = prompt.fn
+                    break
+
+            if prompt_func is None:
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
@@ -215,7 +232,6 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
                     }
                 }
 
-            prompt_func = prompts[prompt_name]
             try:
                 result = prompt_func()
 
