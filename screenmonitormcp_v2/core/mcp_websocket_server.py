@@ -207,7 +207,7 @@ async def _process_mcp_request(request_data: Dict[str, Any], websocket: WebSocke
                 "result": {
                     "resources": [
                         {
-                            "uri": "screen://capture/{id}",
+                            "uriTemplate": "screen://capture/{id}",
                             "name": "Screen Capture",
                             "description": "Captured screen images (binary transfer supported)",
                             "mimeType": "image/png"
