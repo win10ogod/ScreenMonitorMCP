@@ -158,14 +158,13 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
             # Read a resource
             uri = params.get("uri")
 
-            # Use the resource handler from mcp_server
-            from .mcp_server import get_screen_capture, _image_cache
+            # Import image cache from mcp_server
+            from .mcp_server import _image_cache
 
             # Extract capture_id from URI
             if uri and uri.startswith("screen://capture/"):
-                capture_id = uri.replace("screen://capture/", "")
                 try:
-                    # Get the cached entry to retrieve the correct mime_type
+                    # Get the cached entry (already base64 encoded)
                     if uri not in _image_cache:
                         return {
                             "jsonrpc": "2.0",
@@ -176,14 +175,9 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
                             }
                         }
 
-                    # Get mime_type from cache
-                    _, mime_type, metadata = _image_cache[uri]
-
-                    # Get the image bytes
-                    image_bytes = await get_screen_capture(capture_id)
-
-                    import base64
-                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                    # Get image data directly from cache (already base64 encoded)
+                    # This avoids unnecessary decode/re-encode cycle
+                    image_data_base64, mime_type, metadata = _image_cache[uri]
 
                     return {
                         "jsonrpc": "2.0",
@@ -192,8 +186,8 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
                             "contents": [
                                 {
                                     "uri": uri,
-                                    "mimeType": mime_type,  # Use correct mime_type from cache
-                                    "blob": image_base64
+                                    "mimeType": mime_type,
+                                    "blob": image_data_base64  # Use cached base64 directly
                                 }
                             ]
                         }
