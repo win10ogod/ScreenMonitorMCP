@@ -31,6 +31,14 @@ except ImportError:
     GAMING_WS_AVAILABLE = False
     gaming_ws_router = None
 
+# Import MCP WebSocket router (binary transport)
+try:
+    from ..core.mcp_websocket_server import ws_router as mcp_ws_router
+    MCP_WS_AVAILABLE = True
+except ImportError:
+    MCP_WS_AVAILABLE = False
+    mcp_ws_router = None
+
 logger = structlog.get_logger()
 
 # Create app factory for testing
@@ -124,6 +132,11 @@ if GAMING_WS_AVAILABLE and gaming_ws_router:
     app.include_router(gaming_ws_router, prefix="/mcp")
     logger.info("Gaming WebSocket enabled at /mcp/game-stream")
 
+# Include MCP WebSocket router if available (binary transport)
+if MCP_WS_AVAILABLE and mcp_ws_router:
+    app.include_router(mcp_ws_router, prefix="/mcp/ws")
+    logger.info("MCP WebSocket enabled at /mcp/ws/mcp (binary transport)")
+
 
 @app.get("/")
 async def root():
@@ -152,10 +165,24 @@ async def root():
             "description": "High-performance gaming stream (WebSocket)"
         }
 
+    # Add MCP WebSocket endpoint if available (binary transport)
+    if MCP_WS_AVAILABLE:
+        if "mcp" in endpoints and isinstance(endpoints["mcp"], dict):
+            endpoints["mcp"]["websocket"] = "/mcp/ws/mcp"
+            endpoints["mcp"]["ws_stats"] = "/mcp/ws/mcp/stats"
+            endpoints["mcp"]["binary_support"] = True
+        else:
+            endpoints["mcp_websocket"] = {
+                "websocket": "/mcp/ws/mcp",
+                "stats": "/mcp/ws/mcp/stats",
+                "description": "MCP over WebSocket with binary resource transfer",
+                "binary_support": True
+            }
+
     return {
         "name": "ScreenMonitorMCP v2",
         "version": "2.5.0",
-        "description": "Streamable HTTP/SSE MCP Server",
+        "description": "Streamable HTTP/SSE MCP Server with Binary WebSocket Support",
         "endpoints": endpoints,
     }
 
