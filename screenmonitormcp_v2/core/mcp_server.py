@@ -226,30 +226,23 @@ async def get_screen_capture(capture_id: str) -> bytes:
 async def capture_screen(
     monitor: int = 0,
     format: str = "png",
-    quality: int = 85,
-    include_image: bool = False
+    quality: int = 85
 ) -> str:
-    """Capture screen and return resource URI for binary transfer
+    """Capture screen and return resource URI
 
-    This tool captures the screen and returns a resource URI that can be
-    fetched via resources/read for efficient binary transfer (WebSocket/SSE).
-
-    For WebSocket clients: Set include_image=False (default) to get only the
-    resource URI, then fetch via resources/read to receive binary data.
-
-    For stdio clients (Claude Desktop): Set include_image=True to get the
-    image embedded as base64 in the response for immediate display.
+    This tool captures the screen and returns a resource URI.
+    Use resources/read to fetch the actual image data:
+    - WebSocket: Receives binary PNG/JPEG data (no base64)
+    - SSE/HTTP: Receives base64 encoded data
+    - stdio: Uses standard MCP resource protocol
 
     Args:
         monitor: Monitor number to capture (0 for primary)
         format: Image format (png or jpeg)
         quality: Image quality for JPEG (1-100)
-        include_image: Include base64 image data in response (default: False)
-                      Set to True for stdio/Claude Desktop mode
 
     Returns:
-        If include_image=False: JSON with resource_uri for binary fetch
-        If include_image=True: Markdown text with embedded base64 image
+        JSON with resource_uri and metadata
     """
     try:
         capture_result = await screen_capture.capture_screen(monitor)
@@ -269,7 +262,7 @@ async def capture_screen(
         # Determine MIME type
         mime_type = f"image/{format}"
 
-        # Add to cache and get resource URI for future reference
+        # Add to cache and get resource URI
         resource_uri = _add_to_cache(
             capture_result["image_data"],
             mime_type,
@@ -277,39 +270,15 @@ async def capture_screen(
         )
 
         import json
-        if include_image:
-            # Return with embedded image data (for stdio/Claude Desktop)
-            # Create data URL format for image
-            image_data_b64 = capture_result["image_data"]
-            data_url = f"data:{mime_type};base64,{image_data_b64}"
+        result = {
+            "success": True,
+            "resource_uri": resource_uri,
+            "mime_type": mime_type,
+            "metadata": metadata,
+            "note": "Use MCP resources/read to fetch the image data"
+        }
+        return json.dumps(result, indent=2)
 
-            result = f"""✅ Screen captured successfully!
-
-**Metadata:**
-- Monitor: {monitor}
-- Format: {format}
-- Size: {metadata['width']}x{metadata['height']}
-- Timestamp: {metadata['timestamp']}
-- Resource URI: `{resource_uri}`
-
-**Image:**
-![Screenshot]({data_url})
-
-The screenshot is embedded above. The image can also be accessed later via the resource URI: `{resource_uri}`
-"""
-        else:
-            # Return resource URI only (for WebSocket/SSE binary transfer)
-            result = {
-                "success": True,
-                "resource_uri": resource_uri,
-                "mime_type": mime_type,
-                "metadata": metadata,
-                "message": "Use resources/read with this URI to fetch binary image data",
-                "binary_transfer": True
-            }
-            return json.dumps(result, indent=2)
-
-        return result
     except Exception as e:
         logger.error(f"Screen capture failed: {e}")
         return f"Error: {str(e)}"
@@ -489,26 +458,20 @@ async def stop_auto_push_stream_tool(stream_id: str) -> str:
         return f"Error: {str(e)}"
 
 @mcp.tool()
-async def capture_stream_frame(stream_id: str, include_image: bool = False) -> str:
+async def capture_stream_frame(stream_id: str) -> str:
     """Capture current frame from an active stream and return resource URI
 
-    This allows using streams in MCP mode by capturing individual frames
-    and returning a resource URI for efficient binary transfer.
-
-    For WebSocket clients: Set include_image=False (default) to get only the
-    resource URI, then fetch via resources/read to receive binary data.
-
-    For stdio clients (Claude Desktop): Set include_image=True to get the
-    image embedded as base64 in the response for immediate display.
+    This captures a frame from an active stream and returns a resource URI.
+    Use resources/read to fetch the actual image data:
+    - WebSocket: Receives binary PNG/JPEG data (no base64)
+    - SSE/HTTP: Receives base64 encoded data
+    - stdio: Uses standard MCP resource protocol
 
     Args:
         stream_id: Stream ID to capture from
-        include_image: Include base64 image data in response (default: False)
-                      Set to True for stdio/Claude Desktop mode
 
     Returns:
-        If include_image=False: JSON with resource_uri for binary fetch
-        If include_image=True: Markdown text with embedded base64 image
+        JSON with resource_uri and metadata
     """
     try:
         # Get stream info to check if it exists
@@ -545,40 +508,16 @@ async def capture_stream_frame(stream_id: str, include_image: bool = False) -> s
             metadata
         )
 
-        # Create data URL format for image
-        image_data_b64 = capture_result["image_data"]
-        data_url = f"data:{mime_type};base64,{image_data_b64}"
-
         import json
-        if include_image:
-            # Return with embedded image data (for stdio/Claude Desktop)
-            result = f"""📸 Stream frame captured!
+        result = {
+            "success": True,
+            "resource_uri": resource_uri,
+            "mime_type": mime_type,
+            "metadata": metadata,
+            "note": "Use MCP resources/read to fetch the image data"
+        }
+        return json.dumps(result, indent=2)
 
-**Stream Info:**
-- Stream ID: `{stream_id}`
-- Monitor: {monitor}
-- Format: {metadata['format']}
-- Size: {metadata['width']}x{metadata['height']}
-- Timestamp: {metadata['timestamp']}
-
-**Image:**
-![Stream Frame]({data_url})
-
-The frame is embedded above. Resource URI: `{resource_uri}`
-"""
-        else:
-            # Return resource URI only (for WebSocket/SSE binary transfer)
-            result = {
-                "success": True,
-                "resource_uri": resource_uri,
-                "mime_type": mime_type,
-                "metadata": metadata,
-                "message": "Use resources/read with this URI to fetch binary image data",
-                "binary_transfer": True
-            }
-            return json.dumps(result, indent=2)
-
-        return result
     except Exception as e:
         logger.error(f"Failed to capture stream frame: {e}")
         return f"Error: {str(e)}"

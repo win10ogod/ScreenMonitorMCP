@@ -1,130 +1,101 @@
 # MCP Binary Transfer - Usage Guide
 
-## 🎯 Two Modes of Operation
+## 🎯 Unified Resource-Based Transfer
 
-ScreenMonitorMCP v2 now supports **two modes** for image transfer:
+ScreenMonitorMCP v2 uses the **standard MCP resource protocol** for all image transfers.
 
-### 1. **Binary Mode** (WebSocket/SSE) - RECOMMENDED for remote connections
-- Returns only resource URI
-- Fetch image via `resources/read` as binary data
-- **No base64 encoding** → 33% smaller payloads
-- **Lower CPU usage** → No encode/decode overhead
-- **Default mode** (when `include_image=False`)
+### Single Workflow for All Transports
 
-### 2. **Embedded Mode** (stdio/Claude Desktop) - For local clients
-- Returns image embedded in response as base64 data URL
-- Image displays immediately in Claude Desktop
-- Larger payload but works in text-only environments
-- Use when `include_image=True`
+```
+1. Call tool (capture_screen) → Get resource_uri
+2. Call resources/read(uri) → Get image data
+```
+
+The transport automatically optimizes the data format:
+- **WebSocket**: Binary PNG/JPEG bytes (no base64) - **33% smaller!**
+- **SSE/HTTP**: Base64 encoded (JSON compatible)
+- **stdio**: Standard MCP resource protocol
+
+### Benefits
+
+- ✅ **Consistent API** - Same workflow everywhere
+- ✅ **Automatic optimization** - Binary on WebSocket, base64 on SSE
+- ✅ **MCP standard** - Follows protocol specifications
+- ✅ **No confusion** - One clear way to get images
 
 ---
 
-## 📖 How to Use Each Mode
+## 📖 WebSocket Binary Transfer
 
-### Binary Mode (WebSocket - Recommended)
+### Complete Example
 
-**Step 1: Capture screen without embedded image**
 ```python
-await ws.send(json.dumps({
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-        "name": "capture_screen",
-        "arguments": {
-            "monitor": 0,
-            "format": "png",
-            "include_image": False  # ← KEY: Return URI only
-        }
-    }
-}))
+import asyncio
+import websockets
+import json
+
+async def capture_with_binary():
+    uri = "ws://localhost:8000/mcp/ws/mcp"
+
+    async with websockets.connect(uri) as ws:
+        # Wait for welcome
+        await ws.recv()
+
+        # Initialize
+        await ws.send(json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2024-11-05"}
+        }))
+        await ws.recv()
+
+        # ====================================
+        # STEP 1: Get resource URI
+        # ====================================
+        await ws.send(json.dumps({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "capture_screen",
+                "arguments": {
+                    "monitor": 0,
+                    "format": "png"
+                }
+            }
+        }))
+
+        response = json.loads(await ws.recv())
+        result_text = response["result"]["content"][0]["text"]
+        result_json = json.loads(result_text)
+
+        resource_uri = result_json["resource_uri"]
+        print(f"Got URI: {resource_uri}")
+
+        # ====================================
+        # STEP 2: Fetch as BINARY
+        # ====================================
+        await ws.send(json.dumps({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "resources/read",
+            "params": {"uri": resource_uri}
+        }))
+
+        # Receive 3 messages:
+        metadata = json.loads(await ws.recv())      # 1. Metadata (JSON)
+        binary_data = await ws.recv()              # 2. Binary image (bytes!)
+        ack = json.loads(await ws.recv())          # 3. Acknowledgment (JSON)
+
+        # Save directly - NO BASE64 DECODING!
+        with open("screenshot.png", "wb") as f:
+            f.write(binary_data)
+
+        print(f"Saved {len(binary_data):,} bytes")
+
+asyncio.run(capture_with_binary())
 ```
-
-**Response:**
-```json
-{
-  "success": true,
-  "resource_uri": "screen://capture/abc123",
-  "mime_type": "image/png",
-  "metadata": {
-    "timestamp": "2025-11-20T10:30:00Z",
-    "width": 1920,
-    "height": 1080
-  },
-  "message": "Use resources/read with this URI to fetch binary image data",
-  "binary_transfer": true
-}
-```
-
-**Step 2: Fetch resource as binary**
-```python
-# Send resources/read request
-await ws.send(json.dumps({
-    "jsonrpc": "2.0",
-    "id": 2,
-    "method": "resources/read",
-    "params": {"uri": "screen://capture/abc123"}
-}))
-
-# Receive metadata (JSON text frame)
-metadata = json.loads(await ws.recv())
-# {
-#   "type": "resource_metadata",
-#   "uri": "screen://capture/abc123",
-#   "mimeType": "image/png",
-#   "size": 2500000
-# }
-
-# Receive binary data (binary frame - NO BASE64!)
-binary_data = await ws.recv()  # bytes object
-
-# Receive acknowledgment (JSON text frame)
-ack = json.loads(await ws.recv())
-
-# Save directly
-with open("screenshot.png", "wb") as f:
-    f.write(binary_data)
-```
-
----
-
-### Embedded Mode (stdio/Claude Desktop)
-
-**Step 1: Capture screen with embedded image**
-```python
-await ws.send(json.dumps({
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-        "name": "capture_screen",
-        "arguments": {
-            "monitor": 0,
-            "format": "png",
-            "include_image": True  # ← Embed base64 image
-        }
-    }
-}))
-```
-
-**Response:**
-```markdown
-✅ Screen captured successfully!
-
-**Metadata:**
-- Monitor: 0
-- Format: png
-- Size: 1920x1080
-- Timestamp: 2025-11-20T10:30:00Z
-- Resource URI: `screen://capture/abc123`
-
-**Image:**
-![Screenshot](data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...)
-
-The screenshot is embedded above. The image can also be accessed later via the resource URI: `screen://capture/abc123`
-```
-
-The image displays immediately in Claude Desktop UI.
 
 ---
 
@@ -132,36 +103,36 @@ The image displays immediately in Claude Desktop UI.
 
 ### Data Flow
 
-**Binary Mode (Efficient):**
+**WebSocket (Efficient):**
 ```
-Screen → PNG bytes → Cache → WebSocket binary frame → Client
-                                  ↓
-                          NO ENCODING/DECODING!
+Screen → PNG bytes → WebSocket binary frame → Client
+                          ↓
+                   NO ENCODING!
 ```
 
-**Embedded Mode (Compatible):**
+**SSE/HTTP (Compatible):**
 ```
-Screen → PNG bytes → base64 encode → JSON → WebSocket text → base64 decode → PNG bytes
-                         ↓                                        ↓
-                    +33% larger                              CPU overhead
+Screen → PNG bytes → base64 encode → JSON → Client → base64 decode → PNG bytes
+                         ↓                               ↓
+                    +33% larger                     CPU overhead
 ```
 
 ### Size Example
 
 For a 1920x1080 PNG screenshot:
 
-| Mode | Payload Size | Overhead |
-|------|--------------|----------|
-| **Binary** | 2,500,000 bytes | 0% |
-| **Embedded** | 3,333,333 bytes | **+33%** |
+| Transport | Payload Size | Overhead |
+|-----------|--------------|----------|
+| **WebSocket Binary** | 2,500,000 bytes | 0% |
+| **SSE Base64** | 3,333,333 bytes | **+33%** |
 | **Savings** | **833 KB** | - |
 
 ### Speed Example
 
-For 60 FPS streaming:
+For 60 FPS streaming (16.67ms per frame):
 
-| Operation | Binary Mode | Embedded Mode | Savings |
-|-----------|-------------|---------------|---------|
+| Operation | WebSocket | SSE | Savings |
+|-----------|-----------|-----|---------|
 | Encode | 0ms | ~2ms | 2ms |
 | Transfer | ~6ms | ~8ms | 2ms |
 | Decode | 0ms | ~2ms | 2ms |
@@ -169,128 +140,122 @@ For 60 FPS streaming:
 
 ---
 
-## 🎮 When to Use Each Mode
+## 🎮 When to Use Each Transport
 
-### Use Binary Mode (include_image=False) When:
-- ✅ Using WebSocket or SSE transport
+### Use WebSocket When:
 - ✅ High-frequency streaming (30+ FPS)
+- ✅ Real-time applications
 - ✅ Bandwidth is limited
 - ✅ CPU efficiency is critical
 - ✅ Remote connections
-- ✅ Production deployments
 
-### Use Embedded Mode (include_image=True) When:
-- ✅ Using stdio transport (Claude Desktop)
-- ✅ Need immediate display in chat UI
-- ✅ Text-only environment
-- ✅ Single screenshot (not streaming)
-- ✅ Local development/testing
+### Use SSE When:
+- ✅ Simple web clients
+- ✅ One-way server push needed
+- ✅ Firewall restrictions on WebSocket
+
+### Use stdio When:
+- ✅ Claude Desktop integration
+- ✅ Command-line tools
+- ✅ Local-only usage
 
 ---
 
 ## 🔧 Quick Reference
 
-### Binary Mode Workflow
+### Workflow (All Transports)
 
 ```python
-# 1. Capture (URI only)
-capture_screen(monitor=0, include_image=False)
-→ Returns: {"resource_uri": "screen://capture/abc123", ...}
+# Step 1: Get URI
+capture_screen(monitor=0)
+→ Returns: {"resource_uri": "screen://capture/abc123"}
 
-# 2. Fetch binary
+# Step 2: Fetch image
 resources/read(uri="screen://capture/abc123")
-→ Returns: binary PNG/JPEG data (no encoding!)
-
-# 3. Use directly
-save_to_file(binary_data)
+→ Returns:
+  - WebSocket: binary bytes
+  - SSE: base64 string
+  - stdio: per MCP protocol
 ```
 
-### Embedded Mode Workflow
+### Important Rules
 
-```python
-# 1. Capture (with image)
-capture_screen(monitor=0, include_image=True)
-→ Returns: Markdown with embedded base64 image
-
-# 2. Display immediately
-Claude Desktop shows image in chat
-```
+1. **Tools always return text** (JSON or Markdown)
+2. **Resources can return binary** (WebSocket only)
+3. **Use resources/read, not tools/call** for image data
+4. **Two-step process required** for all image transfers
 
 ---
 
-## 📝 Complete Example
+## 📝 Complete Test Example
 
-See `test_mcp_websocket.py` for a complete working example that:
-1. Connects to WebSocket MCP server
-2. Calls `capture_screen(include_image=False)`
-3. Extracts resource URI from JSON response
-4. Fetches resource via `resources/read`
-5. Receives binary data (3 frames: metadata, binary, ack)
-6. Saves to file
-7. Shows size comparison
+See `simple_websocket_binary_test.py` for a working example:
 
-Run it:
 ```bash
+# Install dependencies
 pip install websockets
-python test_mcp_websocket.py
+
+# Run test
+python simple_websocket_binary_test.py
 ```
 
----
-
-## 🚀 Best Practices
-
-1. **Default to Binary Mode** for WebSocket/SSE connections
-2. **Use Embedded Mode** only for stdio/Claude Desktop
-3. **Monitor payload sizes** with `/mcp/ws/mcp/stats`
-4. **Use JPEG format** for streaming (smaller than PNG)
-5. **Lower quality** (50-75) for high FPS
-6. **Cache resource URIs** for later fetch if needed
+Output shows:
+- ✅ Resource URI received
+- ✅ Binary transfer (bytes type)
+- ✅ File saved successfully
+- ✅ Size comparison (binary vs base64)
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Still getting base64 data?
+### Q: Still getting base64 data?
 
-**Problem:** Calling `capture_screen()` without `include_image=False`
+**A:** You're probably calling the tool and expecting binary directly.
 
-**Solution:**
+❌ **Wrong:**
 ```python
-# ✗ Wrong - uses default (now False, but be explicit)
-capture_screen(monitor=0)
-
-# ✓ Correct - explicitly request binary mode
-capture_screen(monitor=0, include_image=False)
+capture_screen()  # Returns JSON text with URI
 ```
 
-### How do I know if binary mode is active?
+✅ **Correct:**
+```python
+# Step 1: Get URI
+capture_screen() → {"resource_uri": "screen://..."}
 
-Check the tool response:
-```json
-{
-  "success": true,
-  "resource_uri": "screen://capture/abc123",
-  "binary_transfer": true  ← This indicates binary mode
-}
+# Step 2: Fetch binary
+resources/read(uri="screen://...") → binary bytes
 ```
 
-### WebSocket returns text, not binary?
+### Q: How do I know if I got binary?
 
-You need **two steps**:
-1. Call `capture_screen(include_image=False)` → get URI
-2. Call `resources/read(uri=...)` → get binary
+**A:** Check the data type:
 
-Don't expect binary from `capture_screen` directly!
+```python
+data = await ws.recv()
+
+if isinstance(data, bytes):
+    print("✓ Got binary data!")
+else:
+    print("✗ Got text, need resources/read")
+```
+
+### Q: Can I use this with Claude Desktop?
+
+**A:** Yes! Claude Desktop's MCP client handles resources/read automatically. Just call `capture_screen()` and it will fetch the resource for you.
 
 ---
 
 ## 📚 Related Documentation
 
 - `MCP_WEBSOCKET_GUIDE.md` - Complete WebSocket transport guide
-- `test_mcp_websocket.py` - Working example code
+- `simple_websocket_binary_test.py` - Working example code
+- `test_mcp_websocket.py` - Comprehensive test suite
 - `README.md` - General project documentation
 
 ---
 
 **Last Updated:** 2025-11-20
 **Version:** 2.5.0
+
+**Key Change:** Removed `include_image` parameter. All image transfers now use the standard two-step resource protocol for consistency and clarity.
