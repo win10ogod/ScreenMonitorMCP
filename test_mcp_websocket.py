@@ -174,16 +174,15 @@ async def main():
             print(f"  ... and {len(tools) - 5} more")
         print()
 
-        # Test 3: Capture screen (with binary transfer)
-        print("Test 3: Capture Screen (Binary Transfer Mode)")
+        # Test 3: Capture screen (returns URI only)
+        print("Test 3: Capture Screen (Get Resource URI)")
         print("-" * 70)
         response = await client.send_request("tools/call", {
             "name": "capture_screen",
             "arguments": {
                 "monitor": 0,
                 "format": "png",
-                "quality": 85,
-                "include_image": False  # Return URI only for binary transfer
+                "quality": 85
             }
         })
 

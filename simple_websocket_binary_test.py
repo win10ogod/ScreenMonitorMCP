@@ -47,8 +47,7 @@ async def main():
                 "name": "capture_screen",
                 "arguments": {
                     "monitor": 0,
-                    "format": "png",
-                    "include_image": False  # ← IMPORTANT: Get URI only
+                    "format": "png"
                 }
             }
         }))
