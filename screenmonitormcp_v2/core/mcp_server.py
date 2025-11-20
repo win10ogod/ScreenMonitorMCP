@@ -223,6 +223,49 @@ async def get_screen_capture(capture_id: str) -> bytes:
     return image_bytes
 
 @mcp.tool()
+async def view_capture(resource_uri: str) -> str:
+    """View a captured screen image (helper for stdio/Claude Desktop)
+
+    This tool fetches a screen capture resource and displays it as an embedded
+    image. This is a convenience tool for stdio mode where MCP clients may not
+    automatically fetch resources.
+
+    For WebSocket/SSE clients, use resources/read directly for binary transfer.
+
+    Args:
+        resource_uri: The resource URI (e.g., "screen://capture/abc123")
+
+    Returns:
+        Markdown with embedded image for immediate display
+    """
+    try:
+        if not resource_uri.startswith("screen://capture/"):
+            return f"Error: Invalid resource URI. Expected screen://capture/... format"
+
+        if resource_uri not in _image_cache:
+            return f"Error: Resource not found: {resource_uri}"
+
+        # Get from cache
+        image_data_base64, mime_type, metadata = _image_cache[resource_uri]
+
+        # Create data URL for display
+        data_url = f"data:{mime_type};base64,{image_data_base64}"
+
+        # Return markdown with embedded image
+        return f"""✅ Screen Capture
+
+**Resource:** `{resource_uri}`
+**Type:** {mime_type}
+**Size:** {metadata.get('width')}x{metadata.get('height')}
+**Captured:** {metadata.get('timestamp')}
+
+![Capture]({data_url})
+"""
+    except Exception as e:
+        logger.error(f"Failed to view capture: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool()
 async def capture_screen(
     monitor: int = 0,
     format: str = "png",
