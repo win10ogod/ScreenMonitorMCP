@@ -171,7 +171,7 @@ async def capture_screen():
         }))
         await ws.recv()
 
-        # Call capture_screen tool
+        # Call capture_screen tool (with include_image=False for binary transfer)
         await ws.send(json.dumps({
             "jsonrpc": "2.0",
             "id": 2,
@@ -180,38 +180,46 @@ async def capture_screen():
                 "name": "capture_screen",
                 "arguments": {
                     "monitor": 0,
-                    "format": "png"
+                    "format": "png",
+                    "include_image": False  # Return URI only, not base64
                 }
             }
         }))
 
-        # Get tool result (contains resource URI)
+        # Get tool result (contains resource URI in JSON)
         result = json.loads(await ws.recv())
-        resource_uri = extract_uri_from_result(result)
+        result_text = result.get("result", {}).get("content", [{}])[0].get("text", "")
+        result_json = json.loads(result_text)
 
-        # Request resource
-        await ws.send(json.dumps({
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "resources/read",
-            "params": {"uri": resource_uri}
-        }))
+        if result_json.get("success"):
+            resource_uri = result_json.get("resource_uri")
+            print(f"✓ Resource URI: {resource_uri}")
 
-        # Receive metadata
-        metadata = json.loads(await ws.recv())
-        print(f"Receiving {metadata['size']} bytes...")
+            # Request resource (this triggers binary transfer)
+            await ws.send(json.dumps({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "resources/read",
+                "params": {"uri": resource_uri}
+            }))
 
-        # Receive BINARY data
-        binary_data = await ws.recv()  # This is bytes, not string!
+            # Receive metadata
+            metadata = json.loads(await ws.recv())
+            print(f"Receiving {metadata['size']} bytes...")
 
-        # Receive acknowledgment
-        ack = json.loads(await ws.recv())
+            # Receive BINARY data (no base64 decoding needed!)
+            binary_data = await ws.recv()  # This is bytes, not string!
 
-        # Save image
-        with open("screenshot.png", "wb") as f:
-            f.write(binary_data)
+            # Receive acknowledgment
+            ack = json.loads(await ws.recv())
 
-        print(f"✓ Saved {len(binary_data)} bytes to screenshot.png")
+            # Save image
+            with open("screenshot.png", "wb") as f:
+                f.write(binary_data)
+
+            print(f"✓ Saved {len(binary_data)} bytes to screenshot.png")
+        else:
+            print(f"✗ Capture failed: {result_text}")
 
 asyncio.run(capture_screen())
 ```

@@ -227,22 +227,29 @@ async def capture_screen(
     monitor: int = 0,
     format: str = "png",
     quality: int = 85,
-    include_image: bool = True
+    include_image: bool = False
 ) -> str:
-    """Capture screen and return with embedded image data
+    """Capture screen and return resource URI for binary transfer
 
-    This tool captures the screen and returns the image data directly embedded
-    in the response, allowing MCP clients to display it immediately.
+    This tool captures the screen and returns a resource URI that can be
+    fetched via resources/read for efficient binary transfer (WebSocket/SSE).
+
+    For WebSocket clients: Set include_image=False (default) to get only the
+    resource URI, then fetch via resources/read to receive binary data.
+
+    For stdio clients (Claude Desktop): Set include_image=True to get the
+    image embedded as base64 in the response for immediate display.
 
     Args:
         monitor: Monitor number to capture (0 for primary)
         format: Image format (png or jpeg)
         quality: Image quality for JPEG (1-100)
-        include_image: Include base64 image data in response (default: True)
+        include_image: Include base64 image data in response (default: False)
+                      Set to True for stdio/Claude Desktop mode
 
     Returns:
-        Response with image data and metadata. The image is embedded as base64
-        data with a data URL format that MCP clients can display directly.
+        If include_image=False: JSON with resource_uri for binary fetch
+        If include_image=True: Markdown text with embedded base64 image
     """
     try:
         capture_result = await screen_capture.capture_screen(monitor)
@@ -269,13 +276,13 @@ async def capture_screen(
             metadata
         )
 
-        # Create data URL format for image (this is widely supported by MCP clients)
-        image_data_b64 = capture_result["image_data"]
-        data_url = f"data:{mime_type};base64,{image_data_b64}"
-
         import json
         if include_image:
-            # Return with embedded image data
+            # Return with embedded image data (for stdio/Claude Desktop)
+            # Create data URL format for image
+            image_data_b64 = capture_result["image_data"]
+            data_url = f"data:{mime_type};base64,{image_data_b64}"
+
             result = f"""✅ Screen captured successfully!
 
 **Metadata:**
@@ -291,13 +298,14 @@ async def capture_screen(
 The screenshot is embedded above. The image can also be accessed later via the resource URI: `{resource_uri}`
 """
         else:
-            # Return resource URI only (legacy mode)
+            # Return resource URI only (for WebSocket/SSE binary transfer)
             result = {
                 "success": True,
                 "resource_uri": resource_uri,
                 "mime_type": mime_type,
                 "metadata": metadata,
-                "note": "Use the resource_uri to fetch the actual image data via MCP resources"
+                "message": "Use resources/read with this URI to fetch binary image data",
+                "binary_transfer": True
             }
             return json.dumps(result, indent=2)
 
@@ -481,18 +489,26 @@ async def stop_auto_push_stream_tool(stream_id: str) -> str:
         return f"Error: {str(e)}"
 
 @mcp.tool()
-async def capture_stream_frame(stream_id: str, include_image: bool = True) -> str:
-    """Capture current frame from an active stream with embedded image data
+async def capture_stream_frame(stream_id: str, include_image: bool = False) -> str:
+    """Capture current frame from an active stream and return resource URI
 
     This allows using streams in MCP mode by capturing individual frames
-    and returning them with embedded image data for immediate display.
+    and returning a resource URI for efficient binary transfer.
+
+    For WebSocket clients: Set include_image=False (default) to get only the
+    resource URI, then fetch via resources/read to receive binary data.
+
+    For stdio clients (Claude Desktop): Set include_image=True to get the
+    image embedded as base64 in the response for immediate display.
 
     Args:
         stream_id: Stream ID to capture from
-        include_image: Include base64 image data in response (default: True)
+        include_image: Include base64 image data in response (default: False)
+                      Set to True for stdio/Claude Desktop mode
 
     Returns:
-        Response with image data and metadata
+        If include_image=False: JSON with resource_uri for binary fetch
+        If include_image=True: Markdown text with embedded base64 image
     """
     try:
         # Get stream info to check if it exists
@@ -535,7 +551,7 @@ async def capture_stream_frame(stream_id: str, include_image: bool = True) -> st
 
         import json
         if include_image:
-            # Return with embedded image data
+            # Return with embedded image data (for stdio/Claude Desktop)
             result = f"""📸 Stream frame captured!
 
 **Stream Info:**
@@ -551,13 +567,14 @@ async def capture_stream_frame(stream_id: str, include_image: bool = True) -> st
 The frame is embedded above. Resource URI: `{resource_uri}`
 """
         else:
-            # Return resource URI only (legacy mode)
+            # Return resource URI only (for WebSocket/SSE binary transfer)
             result = {
                 "success": True,
                 "resource_uri": resource_uri,
                 "mime_type": mime_type,
                 "metadata": metadata,
-                "note": "Use the resource_uri to fetch the actual image data via MCP resources"
+                "message": "Use resources/read with this URI to fetch binary image data",
+                "binary_transfer": True
             }
             return json.dumps(result, indent=2)
 
