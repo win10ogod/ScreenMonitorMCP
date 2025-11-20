@@ -145,7 +145,7 @@ async def _process_mcp_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
                 "result": {
                     "resources": [
                         {
-                            "uri": "screen://capture/{id}",
+                            "uriTemplate": "screen://capture/{id}",
                             "name": "Screen Capture",
                             "description": "Captured screen images",
                             "mimeType": "image/png"
