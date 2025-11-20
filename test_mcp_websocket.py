@@ -174,29 +174,48 @@ async def main():
             print(f"  ... and {len(tools) - 5} more")
         print()
 
-        # Test 3: Capture screen
-        print("Test 3: Capture Screen")
+        # Test 3: Capture screen (with binary transfer)
+        print("Test 3: Capture Screen (Binary Transfer Mode)")
         print("-" * 70)
         response = await client.send_request("tools/call", {
             "name": "capture_screen",
             "arguments": {
                 "monitor": 0,
                 "format": "png",
-                "quality": 85
+                "quality": 85,
+                "include_image": False  # Return URI only for binary transfer
             }
         })
 
-        # Extract resource URI from result
+        # Extract result - should be JSON with resource_uri
         result_text = response.get("result", {}).get("content", [{}])[0].get("text", "")
-        print(f"✓ Capture result: {result_text[:200]}...")
 
-        # Find resource URI in result
-        import re
-        uri_match = re.search(r'screen://capture/[a-f0-9]+', result_text)
-        if uri_match:
-            resource_uri = uri_match.group(0)
-            print(f"✓ Resource URI: {resource_uri}")
-            print()
+        # Parse JSON response
+        import json as json_module
+        try:
+            result_json = json_module.loads(result_text)
+            if result_json.get("success"):
+                resource_uri = result_json.get("resource_uri")
+                print(f"✓ Capture successful!")
+                print(f"  - Resource URI: {resource_uri}")
+                print(f"  - MIME type: {result_json.get('mime_type')}")
+                print(f"  - Binary transfer: {result_json.get('binary_transfer')}")
+                print(f"  - Size: {result_json['metadata']['width']}x{result_json['metadata']['height']}")
+                print()
+            else:
+                print(f"✗ Capture failed: {result_text[:200]}")
+                resource_uri = None
+        except json_module.JSONDecodeError:
+            print(f"✗ Expected JSON response, got: {result_text[:200]}")
+            # Try to extract URI from text (fallback)
+            import re
+            uri_match = re.search(r'screen://capture/[a-f0-9]+', result_text)
+            resource_uri = uri_match.group(0) if uri_match else None
+            if resource_uri:
+                print(f"✓ Extracted resource URI: {resource_uri}")
+                print()
+
+        if resource_uri:
 
             # Test 4: Read resource as BINARY
             print("Test 4: Read Resource (Binary Transfer)")
